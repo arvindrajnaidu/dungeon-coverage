@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { TILE_SIZE, COLORS } from '../constants.js';
+import WeaponInventory from '../game/WeaponInventory.js';
 
 export default class SpriteManager {
   constructor() {
@@ -36,6 +37,12 @@ export default class SpriteManager {
     this.textures.gem = this._makeGemTexture(COLORS.GEM_UNCOLLECTED, 1.0);
     this.textures.gemCollected = this._makeGemTexture(COLORS.GEM_COLLECTED, 1.0);
     this.textures.gemGhost = this._makeGemTexture(COLORS.GEM_GHOST, 0.4);
+
+    // Weapon / rune textures
+    this.textures.weaponNumber = this._makeWeaponTexture(COLORS.WEAPON_NUMBER);
+    this.textures.weaponString = this._makeWeaponTexture(COLORS.WEAPON_STRING);
+    this.textures.weaponBoolean = this._makeWeaponTexture(COLORS.WEAPON_BOOLEAN);
+    this.textures.weaponArray = this._makeWeaponTexture(COLORS.WEAPON_ARRAY);
   }
 
   _makeTileTexture(color, isWall) {
@@ -225,6 +232,51 @@ export default class SpriteManager {
     g.closePath();
     g.endFill();
     return this._graphicsToTexture(g);
+  }
+
+  _makeWeaponTexture(color) {
+    const g = new PIXI.Graphics();
+    const s = TILE_SIZE;
+    const cx = s / 2, cy = s / 2;
+
+    // Outer glow
+    g.beginFill(color, 0.25);
+    g.drawCircle(cx, cy, s * 0.45);
+    g.endFill();
+
+    // Crystal / rune shape (hexagonal)
+    g.beginFill(color);
+    const r = s * 0.32;
+    g.moveTo(cx, cy - r);
+    g.lineTo(cx + r * 0.87, cy - r * 0.5);
+    g.lineTo(cx + r * 0.87, cy + r * 0.5);
+    g.lineTo(cx, cy + r);
+    g.lineTo(cx - r * 0.87, cy + r * 0.5);
+    g.lineTo(cx - r * 0.87, cy - r * 0.5);
+    g.closePath();
+    g.endFill();
+
+    // Inner highlight
+    g.beginFill(0xffffff, 0.35);
+    const ir = r * 0.45;
+    g.moveTo(cx, cy - ir);
+    g.lineTo(cx + ir * 0.87, cy - ir * 0.5);
+    g.lineTo(cx, cy + ir * 0.3);
+    g.lineTo(cx - ir * 0.87, cy - ir * 0.5);
+    g.closePath();
+    g.endFill();
+
+    return this._graphicsToTexture(g);
+  }
+
+  static textureKeyForType(type) {
+    switch (type) {
+      case 'number':  return 'weaponNumber';
+      case 'string':  return 'weaponString';
+      case 'boolean': return 'weaponBoolean';
+      case 'array':   return 'weaponArray';
+      default:        return 'weaponNumber';
+    }
   }
 
   _graphicsToTexture(graphics) {

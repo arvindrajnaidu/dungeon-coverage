@@ -8,6 +8,7 @@ export default class HUD {
     this.container = new PIXI.Container();
     this.onCodeButton = null;
     this.onRunButton = null;
+    this.onForgeButton = null;
 
     // Background bar
     const bg = new PIXI.Graphics();
@@ -55,6 +56,15 @@ export default class HUD {
     });
     this.container.addChild(this.runBtn);
 
+    // Forge button
+    this.forgeBtn = new Button('Forge', 70, 28);
+    this.forgeBtn.x = 270;
+    this.forgeBtn.y = 8;
+    this.forgeBtn.onClick(() => {
+      if (this.onForgeButton) this.onForgeButton();
+    });
+    this.container.addChild(this.forgeBtn);
+
     // Coverage progress bar
     this.coverageBar = new ProgressBar(180, 14);
     this.coverageBar.x = VIEWPORT_WIDTH - 280;
@@ -89,8 +99,9 @@ export default class HUD {
     this.coverageLabel.text = `Stmt: ${Math.round(gameState.coveragePercent)}% | Branch: ${Math.round(gameState.branchCoveragePercent)}%`;
     this.gemsText.text = `Gems: ${gameState.collectedGems.size}/${gameState.totalGems}`;
 
-    // Show/hide Run button based on phase
+    // Show/hide Run and Forge buttons based on phase
     this.runBtn.visible = gameState.phase === PHASES.SETUP;
+    this.forgeBtn.visible = gameState.phase === PHASES.SETUP;
   }
 
   getContainer() {

@@ -68,9 +68,18 @@ export default class TitleScene {
       this.container.addChild(btn);
     }
 
+    // Forge button
+    const forgeBtn = new Button('FORGE WEAPONS', 240, 40);
+    forgeBtn.x = (VIEWPORT_WIDTH - 240) / 2;
+    forgeBtn.y = startY + levels.length * 46 + 10;
+    forgeBtn.onClick(() => {
+      this.sceneManager.switchTo('forge');
+    });
+    this.container.addChild(forgeBtn);
+
     // Instructions
     const instructions = new PIXI.Text(
-      'Provide function inputs | Watch code paths light up',
+      'Forge weapons in the Forge | Drag them onto parameter slots',
       {
         fontFamily: 'monospace',
         fontSize: 11,

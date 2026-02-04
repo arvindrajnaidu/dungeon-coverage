@@ -11,14 +11,17 @@ import CoverageTracker from '../coverage/CoverageTracker.js';
 import CoverageMapper from '../coverage/CoverageMapper.js';
 import Camera from '../engine/Camera.js';
 import CodeModal from '../ui/CodeModal.js';
-import InputModal from '../ui/InputModal.js';
 import BranchModal from '../ui/BranchModal.js';
+import WeaponSidebar from '../ui/WeaponSidebar.js';
+import WeaponSlots from '../ui/WeaponSlots.js';
+import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
 
 export default class LevelScene {
-  constructor(sceneManager, spriteManager) {
+  constructor(sceneManager, spriteManager, weaponInventory) {
     this.sceneManager = sceneManager;
     this.spriteManager = spriteManager;
+    this.weaponInventory = weaponInventory;
     this.container = new PIXI.Container();
     this.worldContainer = new PIXI.Container();
     this.uiContainer = new PIXI.Container();
@@ -35,8 +38,14 @@ export default class LevelScene {
     this.hud = null;
     this.codeModal = null;
     this.camera = null;
-    this.inputModal = new InputModal();
     this.branchModal = new BranchModal();
+
+    // Weapon forge UI
+    this.weaponSidebar = null;
+    this.weaponSlots = null;
+
+    // Drag state
+    this.dragState = null; // { weaponId, sprite, active }
 
     this.currentLayout = null;
     this.levelData = null;
@@ -50,6 +59,10 @@ export default class LevelScene {
     this.savedWalkPath = null;
     this.branchResults = new Map(); // branchId → true/false
     this.coverageData = null;
+
+    // Bind stage drag handlers
+    this._onPointerMove = this._onPointerMove.bind(this);
+    this._onPointerUp = this._onPointerUp.bind(this);
   }
 
   async enter(data = {}) {
@@ -84,6 +97,7 @@ export default class LevelScene {
     this.savedWalkPath = null;
     this.branchResults = new Map();
     this.coverageData = null;
+    this.dragState = null;
 
     // Generate dungeon from source
     this.currentLayout = this.dungeonGenerator.generate(
@@ -124,8 +138,11 @@ export default class LevelScene {
       }
     };
     this.hud.onRunButton = () => {
+      // No-op: Run is now handled by WeaponSlots
+    };
+    this.hud.onForgeButton = () => {
       if (this.gameState.phase === PHASES.SETUP) {
-        this._showInputModal();
+        this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
       }
     };
     this.uiContainer.addChild(this.hud.getContainer());
@@ -136,27 +153,124 @@ export default class LevelScene {
 
     this.gameState.setPhase(PHASES.SETUP);
 
-    // Show input modal
-    this._showInputModal();
+    // Setup weapon slots and sidebar
+    this._showWeaponUI();
   }
 
-  _showInputModal() {
+  _showWeaponUI() {
     const paramNames = this.coverageRunner.extractParamNames(
       this.levelData.source,
       this.levelData.fnName
     );
 
-    // Build param hints from level data or fallback to names-only
     const paramHints = paramNames.map(name => {
       const levelParam = this.levelData.params?.find(p => p.name === name);
       if (levelParam) return levelParam;
       return { name, type: '', placeholder: '' };
     });
 
-    this.inputModal.show(paramHints, (values) => {
-      this._executeWithInputs(values);
+    // Create weapon slots
+    this.weaponSlots = new WeaponSlots(this.spriteManager);
+    this.weaponSlots.setParams(paramHints);
+    this.weaponSlots.onRun(() => {
+      if (this.weaponSlots.allFilled()) {
+        const values = this.weaponSlots.getValues();
+        this._hideWeaponUI();
+        this._executeWithInputs(values);
+      }
     });
+    this.uiContainer.addChild(this.weaponSlots);
+
+    // Create weapon sidebar
+    this.weaponSidebar = new WeaponSidebar(this.spriteManager, this.weaponInventory);
+    this.weaponSidebar.onDragStart((weapon, e) => {
+      this._startDrag(weapon, e);
+    });
+    this.weaponSidebar.show();
+    this.uiContainer.addChild(this.weaponSidebar);
+
+    // Enable stage-level pointer events for drag
+    this.container.eventMode = 'static';
+    this.container.hitArea = new PIXI.Rectangle(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    this.container.on('pointermove', this._onPointerMove);
+    this.container.on('pointerup', this._onPointerUp);
+    this.container.on('pointerupoutside', this._onPointerUp);
   }
+
+  _hideWeaponUI() {
+    if (this.weaponSidebar) {
+      this.weaponSidebar.hide();
+    }
+    if (this.weaponSlots) {
+      this.weaponSlots.visible = false;
+    }
+    this._cancelDrag();
+    this.container.off('pointermove', this._onPointerMove);
+    this.container.off('pointerup', this._onPointerUp);
+    this.container.off('pointerupoutside', this._onPointerUp);
+  }
+
+  // --- Drag & Drop ---
+
+  _startDrag(weapon, e) {
+    // Cancel any existing drag
+    this._cancelDrag();
+
+    const texKey = SpriteManager.textureKeyForType(weapon.type);
+    const sprite = new PIXI.Sprite(this.spriteManager.getTexture(texKey));
+    sprite.width = 32;
+    sprite.height = 32;
+    sprite.anchor.set(0.5);
+    sprite.alpha = 0.85;
+
+    const pos = e.data.getLocalPosition(this.container);
+    sprite.x = pos.x;
+    sprite.y = pos.y;
+
+    this.container.addChild(sprite);
+
+    this.dragState = {
+      weaponId: weapon.id,
+      sprite,
+      active: true,
+    };
+  }
+
+  _onPointerMove(e) {
+    if (!this.dragState || !this.dragState.active) return;
+    const pos = e.data.getLocalPosition(this.container);
+    this.dragState.sprite.x = pos.x;
+    this.dragState.sprite.y = pos.y;
+  }
+
+  _onPointerUp(e) {
+    if (!this.dragState || !this.dragState.active) return;
+
+    const pos = e.data.getLocalPosition(this.container);
+    const slotIdx = this.weaponSlots.isOverSlot(pos.x, pos.y);
+
+    if (slotIdx >= 0) {
+      const weapon = this.weaponInventory.get(this.dragState.weaponId);
+      if (weapon) {
+        this.weaponSlots.dropWeapon(slotIdx, weapon);
+      }
+    }
+
+    // Remove drag sprite
+    this.container.removeChild(this.dragState.sprite);
+    this.dragState.sprite.destroy();
+    this.dragState = null;
+  }
+
+  _cancelDrag() {
+    if (this.dragState) {
+      this.container.removeChild(this.dragState.sprite);
+      this.dragState.sprite.destroy();
+      this.dragState = null;
+    }
+  }
+
+  // --- Execution ---
 
   async _executeWithInputs(values) {
     this.gameState.setPhase(PHASES.EXECUTING);
@@ -514,7 +628,7 @@ export default class LevelScene {
 
     switch (this.gameState.phase) {
       case PHASES.SETUP:
-        // Idle — waiting for input modal
+        // Waiting for weapon drag-drop
         break;
       case PHASES.EXECUTING:
         // Waiting for async coverage execution
@@ -536,8 +650,8 @@ export default class LevelScene {
   }
 
   exit() {
-    // Clean up modals if visible
-    this.inputModal.hide();
+    // Clean up
+    this._hideWeaponUI();
     this.branchModal.hide();
   }
 

@@ -5,6 +5,8 @@ import TitleScene from './scenes/TitleScene.js';
 import LevelScene from './scenes/LevelScene.js';
 import ResultScene from './scenes/ResultScene.js';
 import VictoryScene from './scenes/VictoryScene.js';
+import ForgeScene from './scenes/ForgeScene.js';
+import WeaponInventory from './game/WeaponInventory.js';
 
 async function init() {
   const container = document.getElementById('game-container');
@@ -21,16 +23,21 @@ async function init() {
     // Create scene manager
     const sceneManager = new SceneManager(gameApp);
 
+    // Create shared weapon inventory
+    const weaponInventory = new WeaponInventory();
+
     // Register scenes
     const titleScene = new TitleScene(sceneManager);
-    const levelScene = new LevelScene(sceneManager, spriteManager);
+    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory);
     const resultScene = new ResultScene(sceneManager);
     const victoryScene = new VictoryScene(sceneManager);
+    const forgeScene = new ForgeScene(sceneManager, weaponInventory);
 
     sceneManager.register('title', titleScene);
     sceneManager.register('level', levelScene);
     sceneManager.register('result', resultScene);
     sceneManager.register('victory', victoryScene);
+    sceneManager.register('forge', forgeScene);
 
     // Game loop
     gameApp.onUpdate((delta) => {
