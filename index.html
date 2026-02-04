@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dungeon Coverage</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; }
+    #game-container { width: 100%; height: 100%; }
+    #loading {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      color: #e0e0e0; font-family: monospace; font-size: 18px;
+    }
+  </style>
+  <!-- 1. Load Babel standalone (provides @babel/core + @babel/traverse as window globals) -->
+  <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+  <script>
+    // Wire Babel globals for maineffect.web.js UMD loader and istanbul
+    function unwrap(mod) { return mod && (mod.__esModule || (typeof mod === 'object' && mod.default)) ? mod.default : mod; }
+    var babelTraverse = unwrap(Babel.packages.traverse);
+    var babelTemplate = unwrap(Babel.packages.template);
+    var babelTypes = unwrap(Babel.packages.types) || Babel.packages.types;
+
+    var babelCore = {
+      transform: Babel.transform,
+      transformSync: Babel.transform,
+      transformFromAstSync: Babel.transformFromAst,
+      transformFromAst: Babel.transformFromAst,
+      parseSync: function(code, opts) {
+        return Babel.transform(code, Object.assign({}, opts, { ast: true, code: false })).ast;
+      },
+      template: babelTemplate,
+      traverse: babelTraverse,
+      types: babelTypes,
+    };
+    window["@babel/core"] = babelCore;
+    window["@babel/traverse"] = babelTraverse;
+
+    // Provide a require() shim so esbuild-externalized @babel/* modules resolve
+    window.require = function(id) {
+      if (id === "@babel/core") return babelCore;
+      if (id === "@babel/traverse") return babelTraverse;
+      if (id === "path") return { resolve: function() { return "/"; }, join: function() { return "/"; }, dirname: function() { return "/"; }, sep: "/", posix: { sep: "/" } };
+      console.warn("require() called for:", id);
+      return {};
+    };
+  </script>
+  <!-- 2. Load maineffect.web.js as a script (UMD → sets window.maineffect) -->
+  <script src="/maineffect.web.js"></script>
+</head>
+<body>
+  <div id="game-container">
+    <div id="loading">Loading Dungeon Coverage...</div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

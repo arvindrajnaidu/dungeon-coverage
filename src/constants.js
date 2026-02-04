@@ -1,0 +1,51 @@
+export const TILE_SIZE = 32;
+export const GRID_COLS = 30;
+export const GRID_ROWS = 30;
+export const VIEWPORT_WIDTH = 800;
+export const VIEWPORT_HEIGHT = 600;
+
+export const COLORS = {
+  FLOOR: 0x3b3b5c,
+  WALL: 0x1a1a2e,
+  CORRIDOR: 0x4a4a6a,
+  BRANCH_TILE: 0x6a4a8a,
+  EXIT_TILE: 0x4a8a4a,
+  ENTRY_TILE: 0x8a8a4a,
+  GEM_UNCOLLECTED: 0x44aaff,
+  GEM_COLLECTED: 0x44ff44,
+  GEM_GHOST: 0x666688,
+  PLAYER: 0xff6644,
+  HUD_BG: 0x16213e,
+  HUD_TEXT: 0xe0e0e0,
+  PANEL_BG: 0x0f3460,
+  PANEL_BORDER: 0x533483,
+  BUTTON_BG: 0x533483,
+  BUTTON_HOVER: 0x7a4aaa,
+  BUTTON_TEXT: 0xffffff,
+  PROGRESS_BG: 0x333355,
+  PROGRESS_FILL: 0x44ff44,
+  PROGRESS_PARTIAL: 0xffaa44,
+};
+
+export const TILE_TYPES = {
+  EMPTY: 0,
+  FLOOR: 1,
+  WALL: 2,
+  BRANCH: 3,
+  MERGE: 4,
+  EXIT: 5,
+  ENTRY: 6,
+  CORRIDOR_H: 7,
+  CORRIDOR_V: 8,
+  DOOR_LEFT: 9,
+  DOOR_RIGHT: 10,
+  LOOP_BACK: 11,
+  CATCH_ENTRY: 12,
+};
+
+export const PHASES = {
+  SETUP: 'SETUP',
+  EXECUTING: 'EXECUTING',
+  ANIMATING: 'ANIMATING',
+  RESULTS: 'RESULTS',
+};
