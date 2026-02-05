@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { PHASES, TILE_SIZE, TILE_TYPES, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../constants.js';
+import { PHASES, TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../constants.js';
 import GameState from '../game/GameState.js';
 import Player from '../game/Player.js';
 import DungeonMap from '../game/DungeonMap.js';
@@ -11,17 +11,17 @@ import CoverageTracker from '../coverage/CoverageTracker.js';
 import CoverageMapper from '../coverage/CoverageMapper.js';
 import Camera from '../engine/Camera.js';
 import CodeModal from '../ui/CodeModal.js';
-import BranchModal from '../ui/BranchModal.js';
 import WeaponSidebar from '../ui/WeaponSidebar.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
 import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
 
 export default class LevelScene {
-  constructor(sceneManager, spriteManager, weaponInventory) {
+  constructor(sceneManager, spriteManager, weaponInventory, soundManager = null) {
     this.sceneManager = sceneManager;
     this.spriteManager = spriteManager;
     this.weaponInventory = weaponInventory;
+    this.soundManager = soundManager;
     this.container = new PIXI.Container();
     this.worldContainer = new PIXI.Container();
     this.uiContainer = new PIXI.Container();
@@ -38,7 +38,6 @@ export default class LevelScene {
     this.hud = null;
     this.codeModal = null;
     this.camera = null;
-    this.branchModal = new BranchModal();
 
     // Weapon forge UI
     this.weaponSidebar = null;
@@ -53,11 +52,6 @@ export default class LevelScene {
     // Animation state
     this.coveredGemPositions = new Set(); // "x,y" keys of covered gem tiles
     this.walkFinished = false;
-
-    // Branch pause state
-    this.paused = false;
-    this.savedWalkPath = null;
-    this.branchResults = new Map(); // branchId → true/false
     this.coverageData = null;
 
     // Bind stage drag handlers
@@ -93,9 +87,6 @@ export default class LevelScene {
     this.gameState.startNewRun();
     this.coveredGemPositions = new Set();
     this.walkFinished = false;
-    this.paused = false;
-    this.savedWalkPath = null;
-    this.branchResults = new Map();
     this.coverageData = null;
     this.dragState = null;
 
@@ -111,16 +102,16 @@ export default class LevelScene {
     this.worldContainer.addChild(this.dungeonMap.getContainer());
 
     // Create gem manager
-    this.gemManager = new GemManager(this.spriteManager);
-    const previouslyCollected = this.coverageTracker.getPreviouslyCollectedGems(
-      this.currentLayout.gems
-    );
+    this.gemManager = new GemManager(this.spriteManager, this.soundManager);
+
+    // Get gems that were covered in previous runs
+    const previouslyCollected = this._getPreviouslyCoveredGemIds();
     this.gemManager.placeGems(this.currentLayout.gems, previouslyCollected);
     this.gameState.totalGems = this.currentLayout.gems.length - previouslyCollected.size;
     this.worldContainer.addChild(this.gemManager.getContainer());
 
     // Create player at entry
-    this.player = new Player(this.spriteManager);
+    this.player = new Player(this.spriteManager, this.soundManager);
     this.player.setPosition(this.currentLayout.entry.x, this.currentLayout.entry.y);
     this.worldContainer.addChild(this.player.getContainer());
 
@@ -129,7 +120,7 @@ export default class LevelScene {
     this.camera.snapTo(this.currentLayout.entry.x, this.currentLayout.entry.y);
 
     // HUD
-    this.hud = new HUD();
+    this.hud = new HUD(this.soundManager);
     this.hud.onCodeButton = () => {
       if (this.codeModal.visible) {
         this.codeModal.hide();
@@ -169,9 +160,11 @@ export default class LevelScene {
       return { name, type: '', placeholder: '' };
     });
 
-    // Create weapon slots
-    this.weaponSlots = new WeaponSlots(this.spriteManager);
-    this.weaponSlots.setParams(paramHints);
+    // Create weapon slots positioned above the entry point
+    this.weaponSlots = new WeaponSlots(this.spriteManager, this.soundManager);
+    const entryX = this.currentLayout.entry.x;
+    const entryY = this.currentLayout.entry.y;
+    this.weaponSlots.setParams(paramHints, entryX, entryY);
     this.weaponSlots.onRun(() => {
       if (this.weaponSlots.allFilled()) {
         const values = this.weaponSlots.getValues();
@@ -179,7 +172,7 @@ export default class LevelScene {
         this._executeWithInputs(values);
       }
     });
-    this.uiContainer.addChild(this.weaponSlots);
+    this.worldContainer.addChild(this.weaponSlots);
 
     // Create weapon sidebar
     this.weaponSidebar = new WeaponSidebar(this.spriteManager, this.weaponInventory);
@@ -246,7 +239,8 @@ export default class LevelScene {
   _onPointerUp(e) {
     if (!this.dragState || !this.dragState.active) return;
 
-    const pos = e.data.getLocalPosition(this.container);
+    // Get position in world coordinates (accounting for camera offset)
+    const pos = e.data.getLocalPosition(this.worldContainer);
     const slotIdx = this.weaponSlots.isOverSlot(pos.x, pos.y);
 
     if (slotIdx >= 0) {
@@ -275,6 +269,11 @@ export default class LevelScene {
   async _executeWithInputs(values) {
     this.gameState.setPhase(PHASES.EXECUTING);
 
+    // Play run start sound
+    if (this.soundManager) {
+      this.soundManager.play('runStart');
+    }
+
     // Execute the function with user-provided values as stubs
     const { coverageData } = await this.coverageRunner.execute(
       this.levelData.source,
@@ -284,9 +283,6 @@ export default class LevelScene {
 
     if (coverageData) {
       this.coverageData = coverageData;
-
-      // Precompute branch results from coverage data
-      this._precomputeBranchResults(coverageData);
 
       // Track coverage
       this.coverageTracker.addRun(coverageData);
@@ -300,14 +296,19 @@ export default class LevelScene {
 
       const coveredGems = this.coverageMapper.getCoveredGemIds(coverageData);
 
-      // Build set of covered gem positions for pickup during walk
+      // Build waypoints for ALL covered gems (hero walks the full execution path)
+      // and track which ones can still be collected (not already green)
       this.coveredGemPositions = new Set();
       const gemWaypoints = [];
       for (const gemId of coveredGems) {
         const gem = this.gemManager.gems.get(gemId);
-        if (gem && !gem.ghost) {
-          this.coveredGemPositions.add(`${gem.x},${gem.y}`);
+        if (gem) {
+          // Hero walks through all covered gems
           gemWaypoints.push({ x: gem.x, y: gem.y });
+          // Only mark for collection if not already collected
+          if (!gem.collected) {
+            this.coveredGemPositions.add(`${gem.x},${gem.y}`);
+          }
         }
       }
 
@@ -394,25 +395,10 @@ export default class LevelScene {
   }
 
   _updateAnimating(delta) {
-    // If paused for a branch modal, don't update player
-    if (this.paused) {
-      this.camera.update();
-      return;
-    }
-
     const arrivedAtTile = this.player.update();
 
     if (arrivedAtTile) {
       this._collectGemAtPlayer();
-
-      // Check if hero landed on a BRANCH tile
-      const tileType = this.dungeonMap.getTileType(this.player.gridX, this.player.gridY);
-      if (tileType === TILE_TYPES.BRANCH) {
-        const branch = this.dungeonMap.getBranchAt(this.player.gridX, this.player.gridY);
-        if (branch) {
-          this._pauseForBranch(branch);
-        }
-      }
     }
 
     // Camera follows player
@@ -420,10 +406,14 @@ export default class LevelScene {
     this.camera.update();
 
     // Check if walk is done
-    if (!this.player.isMoving() && !this.walkFinished && !this.paused) {
+    if (!this.player.isMoving() && !this.walkFinished) {
       // Collect gem on the final tile
       this._collectGemAtPlayer();
       this.walkFinished = true;
+
+      // Mark all covered gems based on actual coverage data
+      this._markCoveredGemsFromCoverage();
+
       // Dim uncovered gems after a brief pause
       setTimeout(() => {
         this.gemManager.dimUncovered();
@@ -443,165 +433,33 @@ export default class LevelScene {
     }
   }
 
-  _precomputeBranchResults(coverageData) {
-    this.branchResults = new Map();
-    if (!coverageData || !coverageData.b) return;
+  _markCoveredGemsFromCoverage() {
+    // Use the CoverageMapper to get covered gem IDs
+    const coveredGemIds = this.coverageMapper.getCoveredGemIds(this.coverageData);
 
-    // Istanbul's b map: branchMap key → [trueCount, falseCount]
-    // Match coverage branches to layout branches by source location
-    for (const branch of this.currentLayout.branches) {
-      if (branch.isTryCatch) continue; // skip try/catch branches
-
-      // Try to match by location against istanbul's branchMap
-      const result = this._matchBranchToCoverage(branch, coverageData);
-      if (result !== null) {
-        this.branchResults.set(branch.id, result);
+    // Mark those gems as collected
+    for (const gemId of coveredGemIds) {
+      const gem = this.gemManager.gems.get(gemId);
+      if (gem && !gem.collected) {
+        this.gemManager.collectGem(gemId);
+        this.gameState.collectGem(gemId);
       }
     }
   }
 
-  _matchBranchToCoverage(branch, coverageData) {
-    if (!coverageData.branchMap || !coverageData.b) return null;
+  _getPreviouslyCoveredGemIds() {
+    // Use the aggregated coverage data to find which gems were covered in previous runs
+    const aggregated = this.coverageTracker.getAggregatedCoverage();
+    if (!aggregated) return new Set();
 
-    // Match by comparing source locations
-    for (const [key, branchInfo] of Object.entries(coverageData.branchMap)) {
-      if (branchInfo.type === 'if') {
-        // Compare locations - istanbul uses 1-based lines
-        const covLoc = branchInfo.loc;
-        const branchLoc = branch.loc;
+    // Build mapping and get covered gem IDs
+    this.coverageMapper.buildMapping(
+      aggregated,
+      this.currentLayout.gems,
+      this.currentLayout.tileData
+    );
 
-        if (covLoc && branchLoc &&
-            covLoc.start.line === branchLoc.start.line &&
-            covLoc.start.column === branchLoc.start.column) {
-          const counts = coverageData.b[key];
-          if (counts && counts.length >= 2) {
-            // counts[0] = consequent (true), counts[1] = alternate (false)
-            return counts[0] > 0; // true if the true branch was taken
-          }
-        }
-      }
-    }
-
-    // Fallback: try matching by line number only
-    for (const [key, branchInfo] of Object.entries(coverageData.branchMap)) {
-      if (branchInfo.type === 'if') {
-        const covLoc = branchInfo.loc;
-        const branchLoc = branch.loc;
-        if (covLoc && branchLoc && covLoc.start.line === branchLoc.start.line) {
-          const counts = coverageData.b[key];
-          if (counts && counts.length >= 2) {
-            return counts[0] > 0;
-          }
-        }
-      }
-    }
-
-    return null;
-  }
-
-  _pauseForBranch(branch) {
-    // Save remaining walk path
-    this.savedWalkPath = this.player.walkPath.slice();
-    this.player.walkPath = [];
-    this.player.walking = false;
-    this.paused = true;
-
-    // Get condition text and result
-    const conditionText = this._getConditionText(branch);
-    const result = this.branchResults.get(branch.id);
-
-    // If we couldn't determine the result, try inferring from walk path direction
-    let displayResult = result;
-    if (displayResult === null || displayResult === undefined) {
-      displayResult = this._inferBranchDirection(branch);
-    }
-
-    this.branchModal.show(conditionText, displayResult, () => {
-      // Resume walking
-      this.paused = false;
-      if (this.savedWalkPath && this.savedWalkPath.length > 0) {
-        this.player.setWalkPath(this.savedWalkPath);
-        this.savedWalkPath = null;
-      }
-    });
-  }
-
-  _inferBranchDirection(branch) {
-    // Look at the saved walk path to determine which direction the hero will go
-    if (!this.savedWalkPath || this.savedWalkPath.length === 0) return true;
-
-    // Find the first waypoint that diverges horizontally from the branch tile
-    for (const wp of this.savedWalkPath) {
-      if (wp.x !== branch.x) {
-        // Check if it's heading toward truePath (left) or falsePath (right)
-        if (branch.truePath && branch.falsePath) {
-          const distTrue = Math.abs(wp.x - branch.truePath.col);
-          const distFalse = Math.abs(wp.x - branch.falsePath.col);
-          return distTrue <= distFalse;
-        }
-        break;
-      }
-    }
-
-    return true; // default to true if can't determine
-  }
-
-  _getConditionText(branch) {
-    if (!branch.condition) return 'condition';
-
-    // Try to extract from source code using loc
-    const loc = branch.condition.loc || branch.loc;
-    if (loc && this.levelData.source) {
-      const lines = this.levelData.source.split('\n');
-      const startLine = loc.start.line - 1; // 0-indexed
-      const endLine = loc.end.line - 1;
-
-      if (startLine >= 0 && startLine < lines.length) {
-        if (startLine === endLine) {
-          // Single-line condition
-          const line = lines[startLine];
-          return line.substring(loc.start.column, loc.end.column);
-        } else {
-          // Multi-line: grab from start to end
-          let text = lines[startLine].substring(loc.start.column);
-          for (let i = startLine + 1; i < endLine; i++) {
-            text += ' ' + lines[i].trim();
-          }
-          text += ' ' + lines[endLine].substring(0, loc.end.column);
-          return text.trim();
-        }
-      }
-    }
-
-    // Fallback: reconstruct from AST node
-    return this._conditionToString(branch.condition);
-  }
-
-  _conditionToString(node) {
-    if (!node) return '?';
-    switch (node.type) {
-      case 'BinaryExpression':
-        return `${this._conditionToString(node.left)} ${node.operator} ${this._conditionToString(node.right)}`;
-      case 'LogicalExpression':
-        return `${this._conditionToString(node.left)} ${node.operator} ${this._conditionToString(node.right)}`;
-      case 'UnaryExpression':
-        return `${node.operator}${this._conditionToString(node.argument)}`;
-      case 'Identifier':
-        return node.name;
-      case 'NumericLiteral':
-      case 'NumberLiteral':
-        return String(node.value);
-      case 'StringLiteral':
-        return `"${node.value}"`;
-      case 'BooleanLiteral':
-        return String(node.value);
-      case 'MemberExpression':
-        return `${this._conditionToString(node.object)}.${node.property?.name || '?'}`;
-      case 'CallExpression':
-        return `${this._conditionToString(node.callee)}(...)`;
-      default:
-        return node.type;
-    }
+    return this.coverageMapper.getCoveredGemIds(aggregated);
   }
 
   _finishRun() {
@@ -628,7 +486,10 @@ export default class LevelScene {
 
     switch (this.gameState.phase) {
       case PHASES.SETUP:
-        // Waiting for weapon drag-drop
+        // Waiting for weapon drag-drop - but still animate player idle
+        if (this.player) {
+          this.player.update();
+        }
         break;
       case PHASES.EXECUTING:
         // Waiting for async coverage execution
@@ -641,8 +502,12 @@ export default class LevelScene {
         break;
     }
 
-    this.gemManager.update(delta);
-    this.hud.update(this.gameState);
+    if (this.gemManager) {
+      this.gemManager.update(delta);
+    }
+    if (this.hud) {
+      this.hud.update(this.gameState);
+    }
   }
 
   replayLevel() {
@@ -652,7 +517,6 @@ export default class LevelScene {
   exit() {
     // Clean up
     this._hideWeaponUI();
-    this.branchModal.hide();
   }
 
   getContainer() {

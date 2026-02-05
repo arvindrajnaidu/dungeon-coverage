@@ -5,26 +5,37 @@ export const VIEWPORT_WIDTH = 800;
 export const VIEWPORT_HEIGHT = 600;
 
 export const COLORS = {
-  FLOOR: 0x3b3b5c,
+  // Dungeon tiles - richer, more atmospheric colors
+  FLOOR: 0x4a4a5e,
   WALL: 0x1a1a2e,
-  CORRIDOR: 0x4a4a6a,
-  BRANCH_TILE: 0x6a4a8a,
-  EXIT_TILE: 0x4a8a4a,
-  ENTRY_TILE: 0x8a8a4a,
-  GEM_UNCOLLECTED: 0x44aaff,
-  GEM_COLLECTED: 0x44ff44,
-  GEM_GHOST: 0x666688,
+  CORRIDOR: 0x52526a,
+  BRANCH_TILE: 0x5a3a6a,
+  EXIT_TILE: 0x2a5a4a,
+  ENTRY_TILE: 0x6a6a3a,
+
+  // Gems - vibrant glowing colors
+  GEM_UNCOLLECTED: 0x44bbff,
+  GEM_COLLECTED: 0x44ff66,
+  GEM_GHOST: 0x555577,
+
+  // Player
   PLAYER: 0xff6644,
-  HUD_BG: 0x16213e,
-  HUD_TEXT: 0xe0e0e0,
-  PANEL_BG: 0x0f3460,
-  PANEL_BORDER: 0x533483,
-  BUTTON_BG: 0x533483,
-  BUTTON_HOVER: 0x7a4aaa,
+
+  // UI - deep blues and purples
+  HUD_BG: 0x12192e,
+  HUD_TEXT: 0xe8e8f0,
+  PANEL_BG: 0x141e3a,
+  PANEL_BORDER: 0x6a4a9a,
+  BUTTON_BG: 0x4a3a7a,
+  BUTTON_HOVER: 0x6a5a9a,
   BUTTON_TEXT: 0xffffff,
-  PROGRESS_BG: 0x333355,
-  PROGRESS_FILL: 0x44ff44,
+
+  // Progress bars
+  PROGRESS_BG: 0x2a2a44,
+  PROGRESS_FILL: 0x44ff66,
   PROGRESS_PARTIAL: 0xffaa44,
+
+  // Weapons - magical glowing colors
   WEAPON_NUMBER: 0x44aaff,
   WEAPON_STRING: 0x44ff88,
   WEAPON_BOOLEAN: 0xff6644,

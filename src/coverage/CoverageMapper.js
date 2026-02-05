@@ -9,14 +9,16 @@ export default class CoverageMapper {
   buildMapping(coverageData, gemPlacements, tileData) {
     this.mapping.clear();
 
-    if (!coverageData || !coverageData.statementMap) return;
+    if (!coverageData || !coverageData.statementMap) {
+      console.log('[CoverageMapper] No statementMap in coverage data');
+      return;
+    }
+
+    console.log('[CoverageMapper] Building mapping...');
+    console.log('[CoverageMapper] Istanbul statements:', Object.keys(coverageData.statementMap).length);
+    console.log('[CoverageMapper] Gem placements:', gemPlacements.length);
 
     // Match istanbul statements to gems by source line/column.
-    // Istanbul counts control structures (if, switch, etc.) as statements,
-    // but the layout engine gives those BRANCH tiles with no gem.
-    // Sequential mapping breaks at the first control structure, so we
-    // match by source location instead.
-
     for (const [istId, istLoc] of Object.entries(coverageData.statementMap)) {
       let bestGem = null;
       let bestDist = Infinity;
@@ -43,20 +45,35 @@ export default class CoverageMapper {
 
       if (bestGem) {
         this.mapping.set(istId, bestGem.id);
+        console.log(`[CoverageMapper] Mapped Istanbul ${istId} (line ${istLoc.start.line}:${istLoc.start.column}) -> Gem ${bestGem.id} (line ${bestGem.loc.start.line}:${bestGem.loc.start.column})`);
+      } else {
+        console.log(`[CoverageMapper] No gem match for Istanbul ${istId} (line ${istLoc.start.line}:${istLoc.start.column})`);
       }
     }
+
+    console.log('[CoverageMapper] Total mappings:', this.mapping.size);
   }
 
   getCoveredGemIds(coverageData) {
     const covered = new Set();
-    if (!coverageData || !coverageData.s) return covered;
+    if (!coverageData || !coverageData.s) {
+      console.log('[CoverageMapper] No statement coverage data');
+      return covered;
+    }
 
+    console.log('[CoverageMapper] Getting covered gem IDs...');
     for (const [stmtId, count] of Object.entries(coverageData.s)) {
       if (count > 0) {
         const gemId = this.mapping.get(stmtId);
-        if (gemId) covered.add(gemId);
+        if (gemId) {
+          covered.add(gemId);
+          console.log(`[CoverageMapper] Statement ${stmtId} (count=${count}) -> Gem ${gemId}`);
+        } else {
+          console.log(`[CoverageMapper] Statement ${stmtId} (count=${count}) has no gem mapping`);
+        }
       }
     }
+    console.log('[CoverageMapper] Total covered gems:', covered.size);
     return covered;
   }
 

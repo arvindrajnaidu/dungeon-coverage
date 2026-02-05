@@ -2,11 +2,12 @@ import * as PIXI from 'pixi.js';
 import { COLORS } from '../constants.js';
 
 export default class Button extends PIXI.Container {
-  constructor(text, width = 200, height = 40) {
+  constructor(text, width = 200, height = 40, soundManager = null) {
     super();
     this.buttonWidth = width;
     this.buttonHeight = height;
     this._disabled = false;
+    this.soundManager = soundManager;
 
     this.bg = new PIXI.Graphics();
     this._drawBg(COLORS.BUTTON_BG);
@@ -27,7 +28,10 @@ export default class Button extends PIXI.Container {
     this.cursor = 'pointer';
 
     this.on('pointerover', () => {
-      if (!this._disabled) this._drawBg(COLORS.BUTTON_HOVER);
+      if (!this._disabled) {
+        this._drawBg(COLORS.BUTTON_HOVER);
+        if (this.soundManager) this.soundManager.play('buttonHover');
+      }
     });
     this.on('pointerout', () => {
       if (!this._disabled) this._drawBg(COLORS.BUTTON_BG);
@@ -44,8 +48,16 @@ export default class Button extends PIXI.Container {
 
   onClick(callback) {
     this.on('pointertap', () => {
-      if (!this._disabled) callback();
+      if (!this._disabled) {
+        if (this.soundManager) this.soundManager.play('buttonClick');
+        callback();
+      }
     });
+    return this;
+  }
+
+  setSoundManager(soundManager) {
+    this.soundManager = soundManager;
     return this;
   }
 

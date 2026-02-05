@@ -3,16 +3,45 @@ import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, COLORS } from '../constants.js';
 import Button from '../ui/Button.js';
 import levels from '../levels/index.js';
 
+const STORAGE_KEY = 'dungeon-coverage-progress';
+
 export default class TitleScene {
-  constructor(sceneManager) {
+  constructor(sceneManager, soundManager = null) {
     this.sceneManager = sceneManager;
+    this.soundManager = soundManager;
     this.container = new PIXI.Container();
-    this.unlockedLevels = 1; // start with level 1 unlocked
+    this.unlockedLevels = this._loadProgress();
+  }
+
+  _loadProgress() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (val >= 1) return val;
+      }
+    } catch (e) {
+      // localStorage unavailable
+    }
+    return 1; // default: only level 1 unlocked
+  }
+
+  _saveProgress() {
+    try {
+      localStorage.setItem(STORAGE_KEY, String(this.unlockedLevels));
+    } catch (e) {
+      // localStorage unavailable
+    }
   }
 
   async enter(data = {}) {
     this.container.removeChildren();
-    if (data.unlockedLevels) this.unlockedLevels = data.unlockedLevels;
+
+    // Update unlocked levels if passed in (e.g., after completing a level)
+    if (data.unlockedLevels && data.unlockedLevels > this.unlockedLevels) {
+      this.unlockedLevels = data.unlockedLevels;
+      this._saveProgress();
+    }
 
     // Background
     const bg = new PIXI.Graphics();
@@ -54,7 +83,8 @@ export default class TitleScene {
       const isUnlocked = i < this.unlockedLevels;
       const btn = new Button(
         `${i + 1}. ${level.name}${isUnlocked ? '' : ' [LOCKED]'}`,
-        320, 36
+        320, 36,
+        this.soundManager
       );
       btn.x = (VIEWPORT_WIDTH - 320) / 2;
       btn.y = startY + i * 46;
@@ -68,18 +98,9 @@ export default class TitleScene {
       this.container.addChild(btn);
     }
 
-    // Forge button
-    const forgeBtn = new Button('FORGE WEAPONS', 240, 40);
-    forgeBtn.x = (VIEWPORT_WIDTH - 240) / 2;
-    forgeBtn.y = startY + levels.length * 46 + 10;
-    forgeBtn.onClick(() => {
-      this.sceneManager.switchTo('forge');
-    });
-    this.container.addChild(forgeBtn);
-
     // Instructions
     const instructions = new PIXI.Text(
-      'Forge weapons in the Forge | Drag them onto parameter slots',
+      'Provide function inputs | Watch code paths light up',
       {
         fontFamily: 'monospace',
         fontSize: 11,

@@ -2,9 +2,10 @@ import * as PIXI from 'pixi.js';
 import WeaponInventory from '../game/WeaponInventory.js';
 
 export default class ForgeScene {
-  constructor(sceneManager, weaponInventory) {
+  constructor(sceneManager, weaponInventory, soundManager = null) {
     this.sceneManager = sceneManager;
     this.weaponInventory = weaponInventory;
+    this.soundManager = soundManager;
     this.container = new PIXI.Container();
     this.overlay = null;
     this.selectedType = 'number';
@@ -302,9 +303,17 @@ export default class ForgeScene {
     const parsed = this._parseForType(this.selectedType, rawValue);
     if (parsed.error) {
       errorMsg.textContent = parsed.error;
+      // Play error sound
+      if (this.soundManager) {
+        this.soundManager.play('error');
+      }
       return false;
     }
     this.weaponInventory.add(this.selectedType, parsed.value, name || undefined);
+    // Play forge create sound
+    if (this.soundManager) {
+      this.soundManager.play('forgeCreate');
+    }
     return true;
   }
 

@@ -5,8 +5,9 @@ import Button from '../ui/Button.js';
 import ProgressBar from '../ui/ProgressBar.js';
 
 export default class ResultScene {
-  constructor(sceneManager) {
+  constructor(sceneManager, soundManager = null) {
     this.sceneManager = sceneManager;
+    this.soundManager = soundManager;
     this.container = new PIXI.Container();
     this.gameState = null;
     this.levelScene = null;
@@ -120,6 +121,11 @@ export default class ResultScene {
       fullText.x = panelW / 2;
       fullText.y = 250;
       panel.addChild(fullText);
+
+      // Play level complete sound
+      if (this.soundManager) {
+        this.soundManager.play('levelComplete');
+      }
     }
 
     // Buttons

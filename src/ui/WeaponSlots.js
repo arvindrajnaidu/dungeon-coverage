@@ -1,28 +1,38 @@
 import * as PIXI from 'pixi.js';
-import { COLORS, VIEWPORT_WIDTH } from '../constants.js';
+import { COLORS, VIEWPORT_WIDTH, TILE_SIZE } from '../constants.js';
 import SpriteManager from '../engine/SpriteManager.js';
 
-const SLOT_W = 120;
-const SLOT_H = 50;
-const SLOT_GAP = 12;
-const SLOT_Y = 8;
+const SLOT_W = 100;
+const SLOT_H = 44;
+const SLOT_GAP = 8;
 
 export default class WeaponSlots extends PIXI.Container {
-  constructor(spriteManager) {
+  constructor(spriteManager, soundManager = null) {
     super();
     this.spriteManager = spriteManager;
+    this.soundManager = soundManager;
     this.slots = [];       // { paramName, type, bg, label, weapon, icon, nameText }
     this.runButton = null;
     this._onRunCb = null;
+    this.slotOffsetY = 0;  // Y offset for slots relative to container
   }
 
-  setParams(paramHints) {
+  setParams(paramHints, entryX, entryY) {
     this.removeChildren();
     this.slots = [];
 
     const count = paramHints.length;
     const totalW = count * SLOT_W + (count - 1) * SLOT_GAP;
-    const startX = (VIEWPORT_WIDTH - totalW) / 2;
+
+    // Position slots centered above the entry point
+    const entryPixelX = entryX * TILE_SIZE + TILE_SIZE / 2;
+    const entryPixelY = entryY * TILE_SIZE;
+
+    // Center the slots horizontally above entry
+    const startX = entryPixelX - totalW / 2;
+
+    // Position above entry point with some padding
+    this.slotOffsetY = entryPixelY - SLOT_H - 60; // 60px above entry
 
     for (let i = 0; i < count; i++) {
       const hint = paramHints[i];
@@ -40,7 +50,7 @@ export default class WeaponSlots extends PIXI.Container {
       const bg = new PIXI.Graphics();
       this._drawSlotBg(bg, false);
       bg.x = slotX;
-      bg.y = SLOT_Y;
+      bg.y = this.slotOffsetY;
       this.addChild(bg);
       slot.bg = bg;
 
@@ -48,13 +58,13 @@ export default class WeaponSlots extends PIXI.Container {
       const labelText = hint.type ? `${hint.name} (${hint.type})` : hint.name;
       const label = new PIXI.Text(labelText, {
         fontFamily: 'monospace',
-        fontSize: 11,
+        fontSize: 10,
         fill: 0x888899,
         align: 'center',
       });
       label.anchor.set(0.5);
       label.x = slotX + SLOT_W / 2;
-      label.y = SLOT_Y + SLOT_H / 2;
+      label.y = this.slotOffsetY + SLOT_H / 2;
       this.addChild(label);
       slot.label = label;
 
@@ -62,24 +72,25 @@ export default class WeaponSlots extends PIXI.Container {
     }
 
     // Run button (hidden until all slots filled)
-    this.runButton = this._createRunButton(totalW, startX, count);
+    this.runButton = this._createRunButton(entryPixelX);
     this.addChild(this.runButton);
     this._updateRunButton();
   }
 
-  _createRunButton(totalW, startX, count) {
+  _createRunButton(centerX) {
     const btn = new PIXI.Container();
-    const btnW = 80;
-    const btnH = 32;
+    const btnW = 70;
+    const btnH = 28;
     const bg = new PIXI.Graphics();
     bg.beginFill(0x44aa44);
+    bg.lineStyle(2, 0x66cc66);
     bg.drawRoundedRect(0, 0, btnW, btnH, 6);
     bg.endFill();
     btn.addChild(bg);
 
     const label = new PIXI.Text('RUN', {
       fontFamily: 'monospace',
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: 'bold',
       fill: 0xffffff,
     });
@@ -88,10 +99,27 @@ export default class WeaponSlots extends PIXI.Container {
     label.y = btnH / 2;
     btn.addChild(label);
 
-    btn.x = (VIEWPORT_WIDTH - btnW) / 2;
-    btn.y = SLOT_Y + SLOT_H + 8;
+    btn.x = centerX - btnW / 2;
+    btn.y = this.slotOffsetY + SLOT_H + 6;
     btn.eventMode = 'static';
     btn.cursor = 'pointer';
+
+    // Hover effect
+    btn.on('pointerover', () => {
+      bg.clear();
+      bg.beginFill(0x55bb55);
+      bg.lineStyle(2, 0x77dd77);
+      bg.drawRoundedRect(0, 0, btnW, btnH, 6);
+      bg.endFill();
+    });
+    btn.on('pointerout', () => {
+      bg.clear();
+      bg.beginFill(0x44aa44);
+      bg.lineStyle(2, 0x66cc66);
+      bg.drawRoundedRect(0, 0, btnW, btnH, 6);
+      bg.endFill();
+    });
+
     btn.on('pointertap', () => {
       if (this.allFilled() && this._onRunCb) {
         this._onRunCb();
@@ -104,11 +132,11 @@ export default class WeaponSlots extends PIXI.Container {
   _drawSlotBg(g, filled) {
     g.clear();
     if (filled) {
-      g.beginFill(0x1a2a4e);
+      g.beginFill(0x1a2a4e, 0.9);
       g.lineStyle(2, 0x7a4aaa);
     } else {
-      g.beginFill(0x111133, 0.5);
-      g.lineStyle(2, 0x444466, 0.6);
+      g.beginFill(0x111133, 0.7);
+      g.lineStyle(2, 0x444466, 0.8);
     }
     g.drawRoundedRect(0, 0, SLOT_W, SLOT_H, 6);
     g.endFill();
@@ -123,6 +151,11 @@ export default class WeaponSlots extends PIXI.Container {
 
     slot.weapon = weapon;
 
+    // Play weapon drop sound
+    if (this.soundManager) {
+      this.soundManager.play('weaponDrop');
+    }
+
     // Hide placeholder label
     slot.label.visible = false;
 
@@ -132,23 +165,23 @@ export default class WeaponSlots extends PIXI.Container {
     // Add weapon icon
     const texKey = SpriteManager.textureKeyForType(weapon.type);
     const icon = new PIXI.Sprite(this.spriteManager.getTexture(texKey));
-    icon.width = 24;
-    icon.height = 24;
+    icon.width = 22;
+    icon.height = 22;
     icon.x = slot.bg.x + 6;
-    icon.y = SLOT_Y + (SLOT_H - 24) / 2;
+    icon.y = this.slotOffsetY + (SLOT_H - 22) / 2;
     this.addChild(icon);
     slot.icon = icon;
 
     // Add weapon name text
     const nameText = new PIXI.Text(weapon.name, {
       fontFamily: 'monospace',
-      fontSize: 10,
+      fontSize: 9,
       fill: weapon.color,
       wordWrap: true,
-      wordWrapWidth: SLOT_W - 36,
+      wordWrapWidth: SLOT_W - 34,
     });
-    nameText.x = slot.bg.x + 34;
-    nameText.y = SLOT_Y + (SLOT_H - 14) / 2;
+    nameText.x = slot.bg.x + 32;
+    nameText.y = this.slotOffsetY + (SLOT_H - 12) / 2;
     this.addChild(nameText);
     slot.nameText = nameText;
 
@@ -192,12 +225,12 @@ export default class WeaponSlots extends PIXI.Container {
     return this.slots.length > 0 && this.slots.every(s => s.weapon !== null);
   }
 
-  isOverSlot(x, y) {
+  isOverSlot(globalX, globalY) {
     for (let i = 0; i < this.slots.length; i++) {
       const slot = this.slots[i];
       const sx = slot.bg.x;
-      const sy = SLOT_Y;
-      if (x >= sx && x <= sx + SLOT_W && y >= sy && y <= sy + SLOT_H) {
+      const sy = this.slotOffsetY;
+      if (globalX >= sx && globalX <= sx + SLOT_W && globalY >= sy && globalY <= sy + SLOT_H) {
         return i;
       }
     }

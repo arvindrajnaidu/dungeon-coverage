@@ -3,8 +3,9 @@ import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../constants.js';
 import Button from '../ui/Button.js';
 
 export default class VictoryScene {
-  constructor(sceneManager) {
+  constructor(sceneManager, soundManager = null) {
     this.sceneManager = sceneManager;
+    this.soundManager = soundManager;
     this.container = new PIXI.Container();
     this.particles = [];
     this.time = 0;
@@ -13,6 +14,11 @@ export default class VictoryScene {
   async enter() {
     this.container.removeChildren();
     this.particles = [];
+
+    // Play victory fanfare
+    if (this.soundManager) {
+      this.soundManager.play('victory');
+    }
 
     // Background
     const bg = new PIXI.Graphics();

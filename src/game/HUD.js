@@ -4,8 +4,9 @@ import ProgressBar from '../ui/ProgressBar.js';
 import Button from '../ui/Button.js';
 
 export default class HUD {
-  constructor() {
+  constructor(soundManager = null) {
     this.container = new PIXI.Container();
+    this.soundManager = soundManager;
     this.onCodeButton = null;
     this.onRunButton = null;
     this.onForgeButton = null;
@@ -90,6 +91,76 @@ export default class HUD {
     this.gemsText.x = VIEWPORT_WIDTH - 90;
     this.gemsText.y = 26;
     this.container.addChild(this.gemsText);
+
+    // Mute toggle button
+    this._createMuteButton();
+  }
+
+  _createMuteButton() {
+    this.muteBtn = new PIXI.Container();
+    this.muteBtn.x = VIEWPORT_WIDTH - 36;
+    this.muteBtn.y = 8;
+    this.muteBtn.eventMode = 'static';
+    this.muteBtn.cursor = 'pointer';
+
+    this.muteBg = new PIXI.Graphics();
+    this._drawMuteButton(false);
+    this.muteBtn.addChild(this.muteBg);
+
+    this.muteBtn.on('pointerover', () => {
+      this.muteBg.alpha = 0.8;
+    });
+    this.muteBtn.on('pointerout', () => {
+      this.muteBg.alpha = 1;
+    });
+    this.muteBtn.on('pointertap', () => {
+      if (this.soundManager) {
+        const muted = this.soundManager.toggleMute();
+        this._drawMuteButton(muted);
+      }
+    });
+
+    this.container.addChild(this.muteBtn);
+  }
+
+  _drawMuteButton(muted) {
+    const g = this.muteBg;
+    g.clear();
+
+    // Background
+    g.beginFill(0x333355, 0.8);
+    g.lineStyle(1, 0x555577);
+    g.drawRoundedRect(0, 0, 28, 28, 4);
+    g.endFill();
+
+    // Speaker icon
+    g.lineStyle(0);
+    g.beginFill(muted ? 0x666688 : 0xaaaacc);
+
+    // Speaker body
+    g.drawRect(6, 10, 5, 8);
+    // Speaker cone
+    g.moveTo(11, 10);
+    g.lineTo(17, 6);
+    g.lineTo(17, 22);
+    g.lineTo(11, 18);
+    g.closePath();
+    g.endFill();
+
+    if (muted) {
+      // Draw X for muted
+      g.lineStyle(2, 0xff6644);
+      g.moveTo(19, 9);
+      g.lineTo(25, 19);
+      g.moveTo(25, 9);
+      g.lineTo(19, 19);
+    } else {
+      // Draw sound waves
+      g.lineStyle(1.5, 0xaaaacc);
+      g.arc(17, 14, 4, -0.6, 0.6, false);
+      g.moveTo(17, 14);
+      g.arc(17, 14, 7, -0.5, 0.5, false);
+    }
   }
 
   update(gameState) {
@@ -102,6 +173,11 @@ export default class HUD {
     // Show/hide Run and Forge buttons based on phase
     this.runBtn.visible = gameState.phase === PHASES.SETUP;
     this.forgeBtn.visible = gameState.phase === PHASES.SETUP;
+
+    // Sync mute button state
+    if (this.soundManager) {
+      this._drawMuteButton(this.soundManager.isMuted());
+    }
   }
 
   getContainer() {

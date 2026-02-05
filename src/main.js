@@ -1,5 +1,6 @@
 import GameApp from './engine/GameApp.js';
 import SpriteManager from './engine/SpriteManager.js';
+import SoundManager from './engine/SoundManager.js';
 import SceneManager from './scenes/SceneManager.js';
 import TitleScene from './scenes/TitleScene.js';
 import LevelScene from './scenes/LevelScene.js';
@@ -20,6 +21,10 @@ async function init() {
     const spriteManager = new SpriteManager();
     await spriteManager.load(gameApp.renderer);
 
+    // Load sounds
+    const soundManager = new SoundManager();
+    await soundManager.load();
+
     // Create scene manager
     const sceneManager = new SceneManager(gameApp);
 
@@ -27,11 +32,11 @@ async function init() {
     const weaponInventory = new WeaponInventory();
 
     // Register scenes
-    const titleScene = new TitleScene(sceneManager);
-    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory);
-    const resultScene = new ResultScene(sceneManager);
-    const victoryScene = new VictoryScene(sceneManager);
-    const forgeScene = new ForgeScene(sceneManager, weaponInventory);
+    const titleScene = new TitleScene(sceneManager, soundManager);
+    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, soundManager);
+    const resultScene = new ResultScene(sceneManager, soundManager);
+    const victoryScene = new VictoryScene(sceneManager, soundManager);
+    const forgeScene = new ForgeScene(sceneManager, weaponInventory, soundManager);
 
     sceneManager.register('title', titleScene);
     sceneManager.register('level', levelScene);

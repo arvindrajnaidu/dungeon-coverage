@@ -2,8 +2,9 @@ import * as PIXI from 'pixi.js';
 import { TILE_SIZE } from '../constants.js';
 
 export default class Player {
-  constructor(spriteManager) {
+  constructor(spriteManager, soundManager = null) {
     this.spriteManager = spriteManager;
+    this.soundManager = soundManager;
     this.container = new PIXI.Container();
 
     this.gridX = 0;
@@ -20,25 +21,31 @@ export default class Player {
     this.walkPath = []; // array of { x, y } grid positions
     this.walking = false;
 
-    // Sprite
-    this.sprite = new PIXI.Sprite(spriteManager.getTexture('playerDown'));
-    this.sprite.anchor.set(0, 0);
+    // Animation frames
+    this.idleFrames = spriteManager.getIdleFrames();
+    this.runFrames = spriteManager.getRunFrames();
+    this.hitTexture = spriteManager.getTexture('playerHit');
+
+    // Sprite - scale up 16x28 to fit 32x32 tile better
+    this.sprite = new PIXI.Sprite(this.idleFrames[0]);
+    this.sprite.anchor.set(0.5, 0.7); // anchor near feet
+    this.sprite.scale.set(2, 2); // Scale 2x for 32x56 display size
     this.container.addChild(this.sprite);
 
-    // Direction textures
-    this.dirTextures = {
-      down: spriteManager.getTexture('playerDown'),
-      up: spriteManager.getTexture('playerUp'),
-      left: spriteManager.getTexture('playerLeft'),
-      right: spriteManager.getTexture('playerRight'),
-    };
+    // Animation state
+    this.animFrame = 0;
+    this.animTimer = 0;
+    this.animSpeed = 8; // frames between animation updates
+
+    // Idle state
+    this.idleTime = 0;
   }
 
   setPosition(gridX, gridY) {
     this.gridX = gridX;
     this.gridY = gridY;
-    this.pixelX = gridX * TILE_SIZE;
-    this.pixelY = gridY * TILE_SIZE;
+    this.pixelX = gridX * TILE_SIZE + TILE_SIZE / 2;
+    this.pixelY = gridY * TILE_SIZE + TILE_SIZE / 2;
     this.targetPixelX = this.pixelX;
     this.targetPixelY = this.pixelY;
     this.sprite.x = this.pixelX;
@@ -48,6 +55,8 @@ export default class Player {
   setWalkPath(path) {
     this.walkPath = path.slice(); // copy
     this.walking = true;
+    this.animFrame = 0;
+    this.animTimer = 0;
   }
 
   isMoving() {
@@ -62,7 +71,9 @@ export default class Player {
     const dx = this.targetPixelX - this.pixelX;
     const dy = this.targetPixelY - this.pixelY;
 
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+    const isCurrentlyMoving = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5;
+
+    if (isCurrentlyMoving) {
       // Still moving to current target
       if (Math.abs(dx) <= this.moveSpeed) {
         this.pixelX = this.targetPixelX;
@@ -74,6 +85,17 @@ export default class Player {
       } else {
         this.pixelY += Math.sign(dy) * this.moveSpeed;
       }
+
+      // Flip sprite based on movement direction
+      if (dx < -0.5) {
+        this.sprite.scale.x = -2; // Face left
+      } else if (dx > 0.5) {
+        this.sprite.scale.x = 2; // Face right
+      }
+
+      // Run animation
+      this._updateAnimation(this.runFrames, 6);
+      this.idleTime = 0;
     } else {
       // Arrived at target tile — advance to next in path
       this.pixelX = this.targetPixelX;
@@ -85,6 +107,9 @@ export default class Player {
         arrivedAtNewTile = true;
       } else {
         this.walking = false;
+        // Idle animation
+        this._updateAnimation(this.idleFrames, 10);
+        this.idleTime++;
       }
     }
 
@@ -94,20 +119,35 @@ export default class Player {
     return arrivedAtNewTile;
   }
 
+  _updateAnimation(frames, speed) {
+    this.animTimer++;
+    if (this.animTimer >= speed) {
+      this.animTimer = 0;
+      this.animFrame = (this.animFrame + 1) % frames.length;
+      this.sprite.texture = frames[this.animFrame];
+    }
+  }
+
   _stepTo(gx, gy) {
     const dx = gx - this.gridX;
     const dy = gy - this.gridY;
 
-    // Update facing direction
-    if (dy > 0) this.sprite.texture = this.dirTextures.down;
-    else if (dy < 0) this.sprite.texture = this.dirTextures.up;
-    else if (dx < 0) this.sprite.texture = this.dirTextures.left;
-    else if (dx > 0) this.sprite.texture = this.dirTextures.right;
+    // Flip sprite based on direction
+    if (dx < 0) {
+      this.sprite.scale.x = -2; // Face left
+    } else if (dx > 0) {
+      this.sprite.scale.x = 2; // Face right
+    }
 
     this.gridX = gx;
     this.gridY = gy;
-    this.targetPixelX = gx * TILE_SIZE;
-    this.targetPixelY = gy * TILE_SIZE;
+    this.targetPixelX = gx * TILE_SIZE + TILE_SIZE / 2;
+    this.targetPixelY = gy * TILE_SIZE + TILE_SIZE / 2;
+
+    // Play footstep sound
+    if (this.soundManager) {
+      this.soundManager.playFootstep();
+    }
   }
 
   getContainer() {

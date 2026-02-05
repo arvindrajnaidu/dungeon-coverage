@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "babel-plugin-istanbul": "^6.1.1",
+    "howler": "^2.2.4",
     "maineffectjs": "^0.4.5",
     "pixi.js": "^7.3.2"
   },

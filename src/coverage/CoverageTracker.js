@@ -86,25 +86,8 @@ export default class CoverageTracker {
     return covered;
   }
 
-  getPreviouslyCollectedGems(gemPlacements) {
-    const ids = new Set();
-    if (this.runs.length < 2) return ids;
-
-    // All runs except the latest
-    const previousRuns = this.runs.slice(0, -1);
-    for (const run of previousRuns) {
-      if (run.s) {
-        for (const gem of gemPlacements) {
-          // Check if this statement was covered in any previous run
-          for (const [stmtId, count] of Object.entries(run.s)) {
-            if (count > 0) {
-              ids.add(stmtId);
-            }
-          }
-        }
-      }
-    }
-    return ids;
+  getAggregatedCoverage() {
+    return this.aggregated;
   }
 
   isFullCoverage() {

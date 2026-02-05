@@ -2,23 +2,26 @@ import * as PIXI from 'pixi.js';
 import { TILE_SIZE } from '../constants.js';
 
 export default class GemManager {
-  constructor(spriteManager) {
+  constructor(spriteManager, soundManager = null) {
     this.spriteManager = spriteManager;
-    this.gems = new Map(); // gemId -> { sprite, x, y, statementId, collected, ghost }
+    this.soundManager = soundManager;
+    this.gems = new Map(); // gemId -> { sprite, x, y, statementId, collected }
     this.container = new PIXI.Container();
     this.animationTime = 0;
   }
 
   placeGems(gemPlacements, previouslyCollected = new Set()) {
     this.clear();
+    console.log('[GemManager] Placing gems:', gemPlacements.length, 'previously collected:', previouslyCollected.size);
     for (const gem of gemPlacements) {
-      const isGhost = previouslyCollected.has(gem.id);
-      const texName = isGhost ? 'gemGhost' : 'gem';
+      const alreadyCovered = previouslyCollected.has(gem.id);
+      // Already covered gems show as green (collected), uncovered as normal
+      const texName = alreadyCovered ? 'gemCollected' : 'gem';
       const sprite = new PIXI.Sprite(this.spriteManager.getTexture(texName));
-      sprite.anchor.set(0, 0);
-      sprite.x = gem.x * TILE_SIZE;
-      sprite.y = gem.y * TILE_SIZE;
-      if (isGhost) sprite.alpha = 0.4;
+      sprite.anchor.set(0.5, 0.5);
+      sprite.x = gem.x * TILE_SIZE + TILE_SIZE / 2;
+      sprite.y = gem.y * TILE_SIZE + TILE_SIZE / 2;
+      sprite.scale.set(2, 2); // Scale 16x16 to 32x32
 
       this.container.addChild(sprite);
       this.gems.set(gem.id, {
@@ -26,32 +29,41 @@ export default class GemManager {
         x: gem.x,
         y: gem.y,
         statementId: gem.statementId,
-        collected: false,
-        ghost: isGhost,
-        baseY: gem.y * TILE_SIZE,
+        collected: alreadyCovered, // Mark as already collected
+        ghost: false,
+        baseY: gem.y * TILE_SIZE + TILE_SIZE / 2,
       });
+
+      const hasLoc = gem.loc ? `line ${gem.loc.start.line}:${gem.loc.start.column}` : 'NO LOC';
+      console.log(`[GemManager] Gem ${gem.id} at (${gem.x},${gem.y}) ${hasLoc} ${alreadyCovered ? '[ALREADY COVERED]' : ''}`);
     }
   }
 
   collectGem(gemId) {
     const gem = this.gems.get(gemId);
-    if (!gem || gem.collected || gem.ghost) return false;
+    if (!gem || gem.collected) return false;
     gem.collected = true;
     gem.sprite.texture = this.spriteManager.getTexture('gemCollected');
     this._playCollectAnimation(gem);
+
+    // Play gem collect sound
+    if (this.soundManager) {
+      this.soundManager.playGemCollect();
+    }
+
     return true;
   }
 
   markCovered(coveredStatementIds) {
     for (const [id, gem] of this.gems) {
       if (coveredStatementIds.has(gem.statementId)) {
-        if (!gem.ghost) {
+        if (!gem.collected) {
           gem.collected = true;
           gem.sprite.texture = this.spriteManager.getTexture('gemCollected');
           this._playCollectAnimation(gem);
         }
       } else {
-        if (!gem.ghost) {
+        if (!gem.collected) {
           gem.sprite.alpha = 0.3;
         }
       }
@@ -61,14 +73,16 @@ export default class GemManager {
   _playCollectAnimation(gem) {
     let frame = 0;
     const totalFrames = 20;
+    const baseScale = 2; // Our base scale is 2x
     const ticker = new PIXI.Ticker();
     ticker.add(() => {
       frame++;
       gem.sprite.y = gem.baseY - Math.sin((frame / totalFrames) * Math.PI) * 10;
-      gem.sprite.scale.set(1 + Math.sin((frame / totalFrames) * Math.PI) * 0.3);
+      const scaleBoost = Math.sin((frame / totalFrames) * Math.PI) * 0.5;
+      gem.sprite.scale.set(baseScale + scaleBoost, baseScale + scaleBoost);
       if (frame >= totalFrames) {
         gem.sprite.y = gem.baseY;
-        gem.sprite.scale.set(1);
+        gem.sprite.scale.set(baseScale, baseScale);
         ticker.destroy();
       }
     });
@@ -77,7 +91,7 @@ export default class GemManager {
 
   dimUncovered() {
     for (const [, gem] of this.gems) {
-      if (!gem.collected && !gem.ghost) {
+      if (!gem.collected) {
         gem.sprite.alpha = 0.3;
       }
     }
@@ -85,7 +99,7 @@ export default class GemManager {
 
   getGemAt(gridX, gridY) {
     for (const [id, gem] of this.gems) {
-      if (gem.x === gridX && gem.y === gridY && !gem.collected && !gem.ghost) {
+      if (gem.x === gridX && gem.y === gridY && !gem.collected) {
         return id;
       }
     }
