@@ -26,10 +26,11 @@ export default class Player {
     this.runFrames = spriteManager.getRunFrames();
     this.hitTexture = spriteManager.getTexture('playerHit');
 
-    // Sprite - scale up 16x28 to fit 32x32 tile better
+    // Sprite - scale up to fit tile size
     this.sprite = new PIXI.Sprite(this.idleFrames[0]);
     this.sprite.anchor.set(0.5, 0.7); // anchor near feet
-    this.sprite.scale.set(2, 2); // Scale 2x for 32x56 display size
+    const scale = TILE_SIZE / 16;
+    this.sprite.scale.set(scale, scale);
     this.container.addChild(this.sprite);
 
     // Animation state

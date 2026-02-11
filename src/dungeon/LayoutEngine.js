@@ -56,7 +56,9 @@ export function layoutCFG(cfgRoot) {
   }
 
   const totalWidth = estimateWidth(cfgRoot);
-  const startCol = Math.floor(totalWidth / 2);
+  // Use totalWidth as startCol to ensure enough room for deeply nested left branches
+  // This prevents negative column coordinates
+  const startCol = totalWidth;
 
   // Ensure grid is wide enough
   function ensureGrid(maxRow, maxCol) {
@@ -73,6 +75,10 @@ export function layoutCFG(cfgRoot) {
   }
 
   function setTile(row, col, type, data = null) {
+    if (row < 0 || col < 0) {
+      console.warn(`[LayoutEngine] Attempted to set tile at negative position (${col}, ${row})`);
+      return;
+    }
     ensureGrid(row, col);
     tiles[row][col] = type;
     if (data) tileData[row][col] = data;
@@ -332,23 +338,81 @@ export function layoutCFG(cfgRoot) {
     setTile(endRow, startCol, TILE_TYPES.EXIT, { source: 'end' });
   }
 
-  // Fill empty cells adjacent to walkable cells with walls
-  const finalHeight = tiles.length + 2;
-  const finalWidth = Math.max(...tiles.map(r => r.length)) + 2;
-  ensureGrid(finalHeight, finalWidth);
-
+  // Normalize grid - ensure all rows have the same length
+  const maxWidth = Math.max(...tiles.map(r => r.length));
   for (let r = 0; r < tiles.length; r++) {
-    for (let c = 0; c < tiles[r].length; c++) {
-      if (tiles[r][c] === TILE_TYPES.EMPTY) {
+    while (tiles[r].length < maxWidth) {
+      tiles[r].push(TILE_TYPES.EMPTY);
+      tileData[r].push(null);
+    }
+  }
+
+  // Add padding around the grid for walls
+  const finalHeight = tiles.length + 2;
+  const finalWidth = maxWidth + 2;
+
+  // Create padded grid
+  const paddedTiles = [];
+  const paddedTileData = [];
+
+  // Add empty top row
+  paddedTiles.push(new Array(finalWidth).fill(TILE_TYPES.EMPTY));
+  paddedTileData.push(new Array(finalWidth).fill(null));
+
+  // Add existing rows with padding on left and right
+  for (let r = 0; r < tiles.length; r++) {
+    const newRow = [TILE_TYPES.EMPTY, ...tiles[r], TILE_TYPES.EMPTY];
+    const newDataRow = [null, ...tileData[r], null];
+    paddedTiles.push(newRow);
+    paddedTileData.push(newDataRow);
+  }
+
+  // Add empty bottom row
+  paddedTiles.push(new Array(finalWidth).fill(TILE_TYPES.EMPTY));
+  paddedTileData.push(new Array(finalWidth).fill(null));
+
+  // Update gem positions to account for padding (+1 to x and y)
+  for (const gem of gemPlacements) {
+    gem.x += 1;
+    gem.y += 1;
+  }
+
+  // Update branch positions
+  for (const branch of branches) {
+    branch.x += 1;
+    branch.y += 1;
+    if (branch.truePath) {
+      branch.truePath.col += 1;
+      branch.truePath.startRow += 1;
+    }
+    if (branch.falsePath) {
+      branch.falsePath.col += 1;
+      branch.falsePath.startRow += 1;
+    }
+    if (branch.mergeRow !== undefined) branch.mergeRow += 1;
+    if (branch.trueEndRow !== undefined) branch.trueEndRow += 1;
+    if (branch.falseEndRow !== undefined) branch.falseEndRow += 1;
+    if (branch.cases) {
+      for (const c of branch.cases) {
+        c.col += 1;
+        c.startRow += 1;
+      }
+    }
+  }
+
+  // Fill empty cells adjacent to walkable cells with walls
+  for (let r = 0; r < paddedTiles.length; r++) {
+    for (let c = 0; c < paddedTiles[r].length; c++) {
+      if (paddedTiles[r][c] === TILE_TYPES.EMPTY) {
         // Check if adjacent to any walkable tile
         const neighbors = [
           [r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1],
           [r - 1, c - 1], [r - 1, c + 1], [r + 1, c - 1], [r + 1, c + 1],
         ];
         for (const [nr, nc] of neighbors) {
-          if (nr >= 0 && nr < tiles.length && nc >= 0 && nc < (tiles[nr]?.length || 0)) {
-            if (tiles[nr][nc] !== TILE_TYPES.EMPTY && tiles[nr][nc] !== TILE_TYPES.WALL) {
-              tiles[r][c] = TILE_TYPES.WALL;
+          if (nr >= 0 && nr < paddedTiles.length && nc >= 0 && nc < paddedTiles[nr].length) {
+            if (paddedTiles[nr][nc] !== TILE_TYPES.EMPTY && paddedTiles[nr][nc] !== TILE_TYPES.WALL) {
+              paddedTiles[r][c] = TILE_TYPES.WALL;
               break;
             }
           }
@@ -357,19 +421,19 @@ export function layoutCFG(cfgRoot) {
     }
   }
 
-  // Find entry and exit positions
-  let entry = { x: startCol, y: 0 };
-  let exit = { x: startCol, y: endRow };
-  for (let r = 0; r < tiles.length; r++) {
-    for (let c = 0; c < (tiles[r]?.length || 0); c++) {
-      if (tiles[r][c] === TILE_TYPES.ENTRY) entry = { x: c, y: r };
-      if (tiles[r][c] === TILE_TYPES.EXIT) exit = { x: c, y: r };
+  // Find entry and exit positions (adjusted for padding)
+  let entry = { x: startCol + 1, y: 1 };
+  let exit = { x: startCol + 1, y: endRow + 1 };
+  for (let r = 0; r < paddedTiles.length; r++) {
+    for (let c = 0; c < paddedTiles[r].length; c++) {
+      if (paddedTiles[r][c] === TILE_TYPES.ENTRY) entry = { x: c, y: r };
+      if (paddedTiles[r][c] === TILE_TYPES.EXIT) exit = { x: c, y: r };
     }
   }
 
   return {
-    grid: tiles,
-    tileData,
+    grid: paddedTiles,
+    tileData: paddedTileData,
     entry,
     exit,
     branches,

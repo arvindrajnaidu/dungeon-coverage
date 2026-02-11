@@ -8,6 +8,7 @@ import ResultScene from './scenes/ResultScene.js';
 import VictoryScene from './scenes/VictoryScene.js';
 import ForgeScene from './scenes/ForgeScene.js';
 import WeaponInventory from './game/WeaponInventory.js';
+import ProgressManager from './game/ProgressManager.js';
 
 async function init() {
   const container = document.getElementById('game-container');
@@ -31,10 +32,13 @@ async function init() {
     // Create shared weapon inventory
     const weaponInventory = new WeaponInventory();
 
+    // Create progress manager for saving/loading game progress
+    const progressManager = new ProgressManager();
+
     // Register scenes
-    const titleScene = new TitleScene(sceneManager, soundManager);
-    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, soundManager);
-    const resultScene = new ResultScene(sceneManager, soundManager);
+    const titleScene = new TitleScene(sceneManager, soundManager, progressManager, weaponInventory);
+    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, soundManager, progressManager);
+    const resultScene = new ResultScene(sceneManager, soundManager, progressManager);
     const victoryScene = new VictoryScene(sceneManager, soundManager);
     const forgeScene = new ForgeScene(sceneManager, weaponInventory, soundManager);
 

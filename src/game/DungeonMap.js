@@ -67,8 +67,9 @@ export default class DungeonMap {
         sprite.x = x * TILE_SIZE;
         sprite.y = y * TILE_SIZE;
         sprite.anchor.set(0, 0);
-        // Scale 16x16 tileset sprites to 32x32
-        sprite.scale.set(2, 2);
+        // Scale 16x16 tileset sprites to TILE_SIZE
+        const scale = TILE_SIZE / 16;
+        sprite.scale.set(scale, scale);
         this.container.addChild(sprite);
       }
     }

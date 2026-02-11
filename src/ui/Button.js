@@ -36,6 +36,25 @@ export default class Button extends PIXI.Container {
     this.on('pointerout', () => {
       if (!this._disabled) this._drawBg(COLORS.BUTTON_BG);
     });
+    // Mobile touch feedback
+    this.on('pointerdown', () => {
+      if (!this._disabled) {
+        this._drawBg(COLORS.BUTTON_HOVER);
+        this.scale.set(0.97);
+      }
+    });
+    this.on('pointerup', () => {
+      if (!this._disabled) {
+        this._drawBg(COLORS.BUTTON_BG);
+        this.scale.set(1);
+      }
+    });
+    this.on('pointerupoutside', () => {
+      if (!this._disabled) {
+        this._drawBg(COLORS.BUTTON_BG);
+        this.scale.set(1);
+      }
+    });
   }
 
   _drawBg(color) {

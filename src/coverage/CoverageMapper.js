@@ -8,6 +8,7 @@ export default class CoverageMapper {
 
   buildMapping(coverageData, gemPlacements, tileData) {
     this.mapping.clear();
+    this.reverseMapping = new Map(); // gemId → istanbulId
 
     if (!coverageData || !coverageData.statementMap) {
       console.log('[CoverageMapper] No statementMap in coverage data');
@@ -17,6 +18,16 @@ export default class CoverageMapper {
     console.log('[CoverageMapper] Building mapping...');
     console.log('[CoverageMapper] Istanbul statements:', Object.keys(coverageData.statementMap).length);
     console.log('[CoverageMapper] Gem placements:', gemPlacements.length);
+
+    // First, log all gem locations for debugging
+    console.log('[CoverageMapper] Gem locations:');
+    for (const gem of gemPlacements) {
+      if (gem.loc) {
+        console.log(`  Gem ${gem.id}: line ${gem.loc.start.line}:${gem.loc.start.column}`);
+      } else {
+        console.log(`  Gem ${gem.id}: NO LOCATION DATA`);
+      }
+    }
 
     // Match istanbul statements to gems by source line/column.
     for (const [istId, istLoc] of Object.entries(coverageData.statementMap)) {
@@ -45,13 +56,24 @@ export default class CoverageMapper {
 
       if (bestGem) {
         this.mapping.set(istId, bestGem.id);
-        console.log(`[CoverageMapper] Mapped Istanbul ${istId} (line ${istLoc.start.line}:${istLoc.start.column}) -> Gem ${bestGem.id} (line ${bestGem.loc.start.line}:${bestGem.loc.start.column})`);
+        this.reverseMapping.set(bestGem.id, istId);
+        console.log(`[CoverageMapper] Mapped Istanbul ${istId} (line ${istLoc.start.line}:${istLoc.start.column}) -> Gem ${bestGem.id}`);
       } else {
         console.log(`[CoverageMapper] No gem match for Istanbul ${istId} (line ${istLoc.start.line}:${istLoc.start.column})`);
       }
     }
 
+    // Check for gems without mappings
+    const unmappedGems = gemPlacements.filter(g => !this.reverseMapping.has(g.id));
+    if (unmappedGems.length > 0) {
+      console.warn('[CoverageMapper] UNMAPPED GEMS (no Istanbul statement):');
+      for (const gem of unmappedGems) {
+        console.warn(`  Gem ${gem.id} at line ${gem.loc?.start?.line || '?'}`);
+      }
+    }
+
     console.log('[CoverageMapper] Total mappings:', this.mapping.size);
+    console.log('[CoverageMapper] Mapped gems:', this.reverseMapping.size, '/', gemPlacements.length);
   }
 
   getCoveredGemIds(coverageData) {

@@ -43,8 +43,8 @@ export default class CodeModal {
       this.panel.destroy({ children: true });
     }
 
-    const panelW = 600;
-    const panelH = 460;
+    const panelW = 900;
+    const panelH = 650;
     this.panel = new Panel(panelW, panelH);
     this.panel.centerOn(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 

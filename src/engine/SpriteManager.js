@@ -122,6 +122,8 @@ export default class SpriteManager {
     this.textures.weaponString = this._makeWeaponTexture(COLORS.WEAPON_STRING);
     this.textures.weaponBoolean = this._makeWeaponTexture(COLORS.WEAPON_BOOLEAN);
     this.textures.weaponArray = this._makeWeaponTexture(COLORS.WEAPON_ARRAY);
+    this.textures.weaponJson = this._makeWeaponTexture(COLORS.WEAPON_JSON);
+    this.textures.weaponStub = this._makeWeaponTexture(COLORS.WEAPON_STUB);
 
     // ============================================
     // UI ELEMENTS from tileset
@@ -411,6 +413,8 @@ export default class SpriteManager {
       case 'string':  return 'weaponString';
       case 'boolean': return 'weaponBoolean';
       case 'array':   return 'weaponArray';
+      case 'json':    return 'weaponJson';
+      case 'stub':    return 'weaponStub';
       default:        return 'weaponNumber';
     }
   }

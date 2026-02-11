@@ -26,6 +26,22 @@ export default class WeaponInventory {
     this._save();
   }
 
+  update(id, type, value, name) {
+    const existing = this.weapons.get(id);
+    if (!existing) return null;
+
+    const weapon = {
+      id,
+      name: name || this.generateName(type, value),
+      type,
+      value,
+      color: WeaponInventory.colorForType(type),
+    };
+    this.weapons.set(id, weapon);
+    this._save();
+    return weapon;
+  }
+
   getAll() {
     return Array.from(this.weapons.values());
   }
@@ -44,6 +60,13 @@ export default class WeaponInventory {
         return `Sigil of ${value ? 'True' : 'False'}`;
       case 'array':
         return `Quiver [${Array.isArray(value) ? value.length : 0}]`;
+      case 'json':
+        const keys = value ? Object.keys(value) : [];
+        return `Tome {${keys.length}}`;
+      case 'stub':
+        const ret = value?.returns;
+        if (ret === undefined) return 'Mock fn()';
+        return `Mock fn() → ${typeof ret === 'string' ? ret.substring(0, 8) : ret}`;
       default:
         return `Artifact`;
     }
@@ -76,12 +99,20 @@ export default class WeaponInventory {
     }
   }
 
+  clear() {
+    this.weapons.clear();
+    _nextId = 1;
+    this._save();
+  }
+
   static colorForType(type) {
     switch (type) {
       case 'number':  return 0x44aaff;
       case 'string':  return 0x44ff88;
       case 'boolean': return 0xff6644;
       case 'array':   return 0xffaa44;
+      case 'json':    return 0xcc66ff;
+      case 'stub':    return 0x66ffcc;
       default:        return 0xaaaacc;
     }
   }

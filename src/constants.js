@@ -1,8 +1,8 @@
-export const TILE_SIZE = 32;
-export const GRID_COLS = 30;
-export const GRID_ROWS = 30;
-export const VIEWPORT_WIDTH = 800;
-export const VIEWPORT_HEIGHT = 600;
+export const TILE_SIZE = 40;
+export const GRID_COLS = 45;
+export const GRID_ROWS = 25;
+export const VIEWPORT_WIDTH = 1400;
+export const VIEWPORT_HEIGHT = 800;
 
 export const COLORS = {
   // Dungeon tiles - richer, more atmospheric colors
@@ -40,6 +40,8 @@ export const COLORS = {
   WEAPON_STRING: 0x44ff88,
   WEAPON_BOOLEAN: 0xff6644,
   WEAPON_ARRAY: 0xffaa44,
+  WEAPON_JSON: 0xcc66ff,
+  WEAPON_STUB: 0x66ffcc,
 };
 
 export const TILE_TYPES = {
@@ -62,5 +64,6 @@ export const PHASES = {
   SETUP: 'SETUP',
   EXECUTING: 'EXECUTING',
   ANIMATING: 'ANIMATING',
+  RETURNING: 'RETURNING',
   RESULTS: 'RESULTS',
 };

@@ -6,12 +6,29 @@
   <title>Dungeon Coverage</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; }
-    #game-container { width: 100%; height: 100%; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden; background: #1a1a2e;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #game-container {
+      width: 100%; height: 100%;
+      position: fixed;
+      top: 0; left: 0;
+    }
+    #game-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
     #loading {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       color: #e0e0e0; font-family: monospace; font-size: 18px;
     }
+    /* Prevent pull-to-refresh on mobile */
+    body { overscroll-behavior: none; }
   </style>
   <!-- 1. Load Babel standalone (provides @babel/core + @babel/traverse as window globals) -->
   <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>

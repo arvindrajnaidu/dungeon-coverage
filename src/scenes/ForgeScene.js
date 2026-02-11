@@ -10,6 +10,10 @@ export default class ForgeScene {
     this.overlay = null;
     this.selectedType = 'number';
     this.returnData = null;
+
+    // Form elements for editing
+    this.formElements = null;
+    this.editingWeaponId = null;
   }
 
   async enter(data = {}) {
@@ -20,6 +24,8 @@ export default class ForgeScene {
 
   exit() {
     this._removeOverlay();
+    this.editingWeaponId = null;
+    this.formElements = null;
   }
 
   update() {}
@@ -90,6 +96,8 @@ export default class ForgeScene {
       { key: 'string', label: 'String', color: '#44ff88' },
       { key: 'boolean', label: 'Boolean', color: '#ff6644' },
       { key: 'array', label: 'Array', color: '#ffaa44' },
+      { key: 'json', label: 'JSON', color: '#cc66ff' },
+      { key: 'stub', label: 'Stub', color: '#66ffcc' },
     ];
     const typeBtns = {};
 
@@ -157,7 +165,7 @@ export default class ForgeScene {
     errorMsg.style.cssText = 'font-size: 11px; color: #ff6644; min-height: 16px;';
     craftPanel.appendChild(errorMsg);
 
-    // Forge button
+    // Forge/Update button
     const forgeBtn = document.createElement('button');
     forgeBtn.textContent = 'FORGE';
     forgeBtn.style.cssText = `
@@ -168,14 +176,37 @@ export default class ForgeScene {
     forgeBtn.addEventListener('mouseenter', () => { forgeBtn.style.background = '#7a4aaa'; });
     forgeBtn.addEventListener('mouseleave', () => { forgeBtn.style.background = '#533483'; });
     forgeBtn.addEventListener('click', () => {
-      const result = this._forgeWeapon(valueInput.value.trim(), nameInput.value.trim(), errorMsg);
-      if (result) {
-        valueInput.value = '';
-        nameInput.value = '';
-        this._renderInventoryList(invList);
+      if (this.editingWeaponId) {
+        // Update existing weapon
+        const result = this._updateWeapon(this.editingWeaponId, valueInput.value.trim(), nameInput.value.trim(), errorMsg);
+        if (result) {
+          this._clearEditMode();
+          this._renderInventoryList(invList);
+        }
+      } else {
+        // Create new weapon
+        const result = this._forgeWeapon(valueInput.value.trim(), nameInput.value.trim(), errorMsg);
+        if (result) {
+          valueInput.value = '';
+          nameInput.value = '';
+          this._renderInventoryList(invList);
+        }
       }
     });
     craftPanel.appendChild(forgeBtn);
+
+    // Cancel edit button (hidden by default)
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'CANCEL';
+    cancelBtn.style.cssText = `
+      padding: 8px 16px; background: transparent; border: 1px solid #664444;
+      border-radius: 6px; color: #aa6666; font-family: monospace; font-size: 12px;
+      cursor: pointer; margin-top: 4px; display: none;
+    `;
+    cancelBtn.addEventListener('click', () => {
+      this._clearEditMode();
+    });
+    craftPanel.appendChild(cancelBtn);
 
     content.appendChild(craftPanel);
 
@@ -198,6 +229,18 @@ export default class ForgeScene {
     invPanel.appendChild(invList);
 
     content.appendChild(invPanel);
+
+    // Store form elements for editing (must be after invList is created)
+    this.formElements = {
+      valueInput,
+      nameInput,
+      errorMsg,
+      forgeBtn,
+      cancelBtn,
+      typeBtns,
+      types,
+      invList,
+    };
     panel.appendChild(content);
 
     // Bottom: Back button
@@ -253,6 +296,8 @@ export default class ForgeScene {
       case 'string':  valueInput.placeholder = 'Enter a string (e.g. hello)'; break;
       case 'boolean': valueInput.placeholder = 'true or false'; break;
       case 'array':   valueInput.placeholder = 'e.g. [1, 2, 3]'; break;
+      case 'json':    valueInput.placeholder = 'e.g. {"name": "hero", "level": 5}'; break;
+      case 'stub':    valueInput.placeholder = 'JS expression: {ok: true}, "text", 42, or empty'; break;
     }
   }
 
@@ -293,6 +338,33 @@ export default class ForgeScene {
           return { error: 'Not valid JSON array' };
         }
       }
+      case 'json': {
+        try {
+          const obj = JSON.parse(raw);
+          if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+            return { error: 'Enter a JSON object (use {} format)' };
+          }
+          return { value: obj };
+        } catch (e) {
+          return { error: 'Not valid JSON' };
+        }
+      }
+      case 'stub': {
+        // Stub can have an optional return value
+        // Empty = returns undefined, otherwise evaluate as JavaScript code
+        if (raw === '') {
+          return { value: { __stub: true, returns: undefined } };
+        }
+        // Evaluate as JavaScript expression
+        try {
+          // Use Function constructor to safely evaluate the expression
+          const evalFn = new Function('return (' + raw + ')');
+          const result = evalFn();
+          return { value: { __stub: true, returns: result } };
+        } catch (e) {
+          return { error: `Invalid JS: ${e.message}` };
+        }
+      }
       default:
         return { error: 'Unknown type' };
     }
@@ -303,18 +375,134 @@ export default class ForgeScene {
     const parsed = this._parseForType(this.selectedType, rawValue);
     if (parsed.error) {
       errorMsg.textContent = parsed.error;
-      // Play error sound
       if (this.soundManager) {
         this.soundManager.play('error');
       }
       return false;
     }
     this.weaponInventory.add(this.selectedType, parsed.value, name || undefined);
-    // Play forge create sound
     if (this.soundManager) {
       this.soundManager.play('forgeCreate');
     }
     return true;
+  }
+
+  _updateWeapon(weaponId, rawValue, name, errorMsg) {
+    errorMsg.textContent = '';
+    const parsed = this._parseForType(this.selectedType, rawValue);
+    if (parsed.error) {
+      errorMsg.textContent = parsed.error;
+      if (this.soundManager) {
+        this.soundManager.play('error');
+      }
+      return false;
+    }
+    this.weaponInventory.update(weaponId, this.selectedType, parsed.value, name || undefined);
+    if (this.soundManager) {
+      this.soundManager.play('forgeCreate');
+    }
+    return true;
+  }
+
+  _editWeapon(weapon) {
+    this.editingWeaponId = weapon.id;
+    this.selectedType = weapon.type;
+
+    // Update type buttons
+    this._updateTypeButtons(this.formElements.typeBtns, this.formElements.types);
+    this._updateValuePlaceholder(this.formElements.valueInput);
+
+    // Populate value field
+    this.formElements.valueInput.value = this._valueToRaw(weapon.type, weapon.value);
+    this.formElements.nameInput.value = weapon.name;
+    this.formElements.errorMsg.textContent = '';
+
+    // Update button states
+    this.formElements.forgeBtn.textContent = 'UPDATE';
+    this.formElements.cancelBtn.style.display = 'block';
+
+    // Focus value input
+    this.formElements.valueInput.focus();
+
+    // Re-render to highlight editing item
+    this._renderInventoryList(this.formElements.invList);
+  }
+
+  _clearEditMode() {
+    this.editingWeaponId = null;
+    this.formElements.valueInput.value = '';
+    this.formElements.nameInput.value = '';
+    this.formElements.errorMsg.textContent = '';
+    this.formElements.forgeBtn.textContent = 'FORGE';
+    this.formElements.cancelBtn.style.display = 'none';
+    this._renderInventoryList(this.formElements.invList);
+  }
+
+  _cloneWeapon(weapon) {
+    // Deep clone the value to avoid reference issues
+    const clonedValue = JSON.parse(JSON.stringify(weapon.value));
+
+    // Generate a new name with "(copy)" suffix
+    let newName = weapon.name + ' (copy)';
+
+    // Add to inventory
+    this.weaponInventory.add(weapon.type, clonedValue, newName);
+
+    if (this.soundManager) {
+      this.soundManager.play('forgeCreate');
+    }
+  }
+
+  _valueToJsString(value) {
+    // Convert a value to JavaScript-style string (not JSON)
+    if (value === null) return 'null';
+    if (value === undefined) return 'undefined';
+    if (typeof value === 'string') return JSON.stringify(value);
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (Array.isArray(value)) {
+      return '[' + value.map(v => this._valueToJsString(v)).join(', ') + ']';
+    }
+    if (typeof value === 'object') {
+      const entries = Object.entries(value).map(([k, v]) => {
+        // Use unquoted keys if they're valid identifiers
+        const key = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : JSON.stringify(k);
+        return `${key}: ${this._valueToJsString(v)}`;
+      });
+      return '{' + entries.join(', ') + '}';
+    }
+    return String(value);
+  }
+
+  _valueToRaw(type, value) {
+    switch (type) {
+      case 'number':
+        return String(value);
+      case 'string':
+        return value;
+      case 'boolean':
+        return String(value);
+      case 'array':
+      case 'json':
+        return JSON.stringify(value, null, 2);
+      case 'stub':
+        if (value?.returns === undefined) return '';
+        // Convert back to JavaScript-style format
+        return this._valueToJsString(value.returns);
+      default:
+        return String(value);
+    }
+  }
+
+  _formatDisplayValue(weapon) {
+    if (weapon.type === 'stub') {
+      const ret = weapon.value?.returns;
+      if (ret === undefined) return 'stub()';
+      return `stub() → ${this._valueToJsString(ret)}`;
+    }
+    if (weapon.type === 'array' || weapon.type === 'json') {
+      return this._valueToJsString(weapon.value);
+    }
+    return String(weapon.value);
   }
 
   _renderInventoryList(listEl) {
@@ -348,19 +536,48 @@ export default class ForgeScene {
       // Name + value
       const info = document.createElement('span');
       info.style.cssText = 'flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
-      const valStr = w.type === 'array' ? JSON.stringify(w.value) : String(w.value);
+      const valStr = this._formatDisplayValue(w);
       info.textContent = `${w.name}`;
       info.title = `${w.name} = ${valStr}`;
       row.appendChild(info);
 
       // Value badge
       const valBadge = document.createElement('span');
-      valBadge.textContent = w.type === 'array' ? JSON.stringify(w.value) : String(w.value);
+      valBadge.textContent = valStr;
       valBadge.style.cssText = `
         font-size: 10px; color: #888; max-width: 80px; overflow: hidden;
         text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0;
       `;
       row.appendChild(valBadge);
+
+      // Edit button
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✎';
+      editBtn.title = 'Edit';
+      editBtn.style.cssText = `
+        background: transparent; border: 1px solid #335555; border-radius: 3px;
+        color: #66aaaa; font-family: monospace; font-size: 11px; cursor: pointer;
+        padding: 1px 6px; flex-shrink: 0;
+      `;
+      editBtn.addEventListener('click', () => {
+        this._editWeapon(w);
+      });
+      row.appendChild(editBtn);
+
+      // Clone button
+      const cloneBtn = document.createElement('button');
+      cloneBtn.textContent = '⧉';
+      cloneBtn.title = 'Clone';
+      cloneBtn.style.cssText = `
+        background: transparent; border: 1px solid #445533; border-radius: 3px;
+        color: #88aa66; font-family: monospace; font-size: 11px; cursor: pointer;
+        padding: 1px 6px; flex-shrink: 0;
+      `;
+      cloneBtn.addEventListener('click', () => {
+        this._cloneWeapon(w);
+        this._renderInventoryList(listEl);
+      });
+      row.appendChild(cloneBtn);
 
       // Delete button
       const delBtn = document.createElement('button');
@@ -372,9 +589,19 @@ export default class ForgeScene {
       `;
       delBtn.addEventListener('click', () => {
         this.weaponInventory.remove(w.id);
-        this._renderInventoryList(listEl);
+        if (this.editingWeaponId === w.id) {
+          this._clearEditMode();
+        } else {
+          this._renderInventoryList(listEl);
+        }
       });
       row.appendChild(delBtn);
+
+      // Highlight if currently editing
+      if (this.editingWeaponId === w.id) {
+        row.style.border = '1px solid #7a4aaa';
+        row.style.background = '#2a2a4e';
+      }
 
       listEl.appendChild(row);
     }

@@ -11,17 +11,20 @@ import CoverageTracker from '../coverage/CoverageTracker.js';
 import CoverageMapper from '../coverage/CoverageMapper.js';
 import Camera from '../engine/Camera.js';
 import CodeModal from '../ui/CodeModal.js';
+import TestModal from '../ui/TestModal.js';
 import WeaponSidebar from '../ui/WeaponSidebar.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
+import Button from '../ui/Button.js';
 import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
 
 export default class LevelScene {
-  constructor(sceneManager, spriteManager, weaponInventory, soundManager = null) {
+  constructor(sceneManager, spriteManager, weaponInventory, soundManager = null, progressManager = null) {
     this.sceneManager = sceneManager;
     this.spriteManager = spriteManager;
     this.weaponInventory = weaponInventory;
     this.soundManager = soundManager;
+    this.progressManager = progressManager;
     this.container = new PIXI.Container();
     this.worldContainer = new PIXI.Container();
     this.uiContainer = new PIXI.Container();
@@ -37,7 +40,11 @@ export default class LevelScene {
     this.gemManager = null;
     this.hud = null;
     this.codeModal = null;
+    this.testModal = null;
     this.camera = null;
+
+    // Track test runs for the Test modal
+    this.testRuns = [];
 
     // Weapon forge UI
     this.weaponSidebar = null;
@@ -71,6 +78,19 @@ export default class LevelScene {
       this.gameState.reset();
       this.gameState.currentLevel = levelIndex;
       this.coverageTracker.reset();
+
+      // Load saved tests and replay them to build coverage
+      if (this.progressManager) {
+        const savedTests = this.progressManager.getLevelTests(levelIndex);
+        this.testRuns = savedTests || [];
+
+        if (this.testRuns.length > 0) {
+          console.log('[LevelScene] Replaying', this.testRuns.length, 'saved tests to compute coverage');
+          await this._replaySavedTests();
+        }
+      } else {
+        this.testRuns = [];
+      }
     }
 
     this._startRun();
@@ -79,10 +99,44 @@ export default class LevelScene {
     this.container.addChild(this.uiContainer);
   }
 
+  // Silently execute all saved tests to compute aggregated coverage
+  async _replaySavedTests() {
+    for (const test of this.testRuns) {
+      const { coverageData } = await this.coverageRunner.execute(
+        this.levelData.source,
+        this.levelData.fnName,
+        test.inputs,
+        { quiet: true }  // Don't log during replay
+      );
+      if (coverageData) {
+        this.coverageTracker.addRun(coverageData);
+      }
+    }
+    const stmtCov = this.coverageTracker.getStatementCoverage();
+    console.log('[LevelScene] Replayed', this.testRuns.length, 'tests. Coverage:', stmtCov.percent.toFixed(0) + '%');
+  }
+
   _startRun() {
     this.worldContainer.removeChildren();
     this.uiContainer.removeChildren();
     this.worldContainer.scale.set(1);
+    this.noWeaponsOverlay = null;
+
+    // Get screen dimensions and add full-screen background
+    const gameApp = this.sceneManager.gameApp;
+    const screenW = gameApp.getScreenWidth();
+    const screenH = gameApp.getScreenHeight();
+
+    // Background - fill entire screen
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x1a1a2e);
+    bg.drawRect(0, 0, screenW, screenH);
+    bg.endFill();
+    this.container.addChildAt(bg, 0);
+
+    // Calculate offset to center the game content
+    this.offsetX = Math.max(0, (screenW - VIEWPORT_WIDTH) / 2);
+    this.offsetY = 0;
 
     this.gameState.startNewRun();
     this.coveredGemPositions = new Set();
@@ -95,6 +149,9 @@ export default class LevelScene {
       this.levelData.source,
       this.levelData.fnName
     );
+
+    // Log the dungeon layout for debugging
+    this._logDungeonLayout();
 
     // Create dungeon map
     this.dungeonMap = new DungeonMap(this.spriteManager);
@@ -115,9 +172,13 @@ export default class LevelScene {
     this.player.setPosition(this.currentLayout.entry.x, this.currentLayout.entry.y);
     this.worldContainer.addChild(this.player.getContainer());
 
-    // Camera
-    this.camera = new Camera(this.worldContainer);
+    // Camera - pass offset to center content on wider screens
+    this.camera = new Camera(this.worldContainer, this.offsetX, this.offsetY);
     this.camera.snapTo(this.currentLayout.entry.x, this.currentLayout.entry.y);
+
+    // Position UI container with offset
+    this.uiContainer.x = this.offsetX;
+    this.uiContainer.y = this.offsetY;
 
     // HUD
     this.hud = new HUD(this.soundManager);
@@ -125,22 +186,35 @@ export default class LevelScene {
       if (this.codeModal.visible) {
         this.codeModal.hide();
       } else {
+        if (this.testModal.visible) this.testModal.hide();
         this.codeModal.show(this.levelData.source, this.levelData.name);
       }
     };
-    this.hud.onRunButton = () => {
-      // No-op: Run is now handled by WeaponSlots
+    this.hud.onTestButton = () => {
+      if (this.testModal.visible) {
+        this.testModal.hide();
+      } else {
+        if (this.codeModal.visible) this.codeModal.hide();
+        this.testModal.show(this.testRuns, this.levelData.fnName, this.levelData.name);
+      }
     };
     this.hud.onForgeButton = () => {
       if (this.gameState.phase === PHASES.SETUP) {
         this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
       }
     };
+    this.hud.onResetButton = () => {
+      this._resetTests();
+    };
     this.uiContainer.addChild(this.hud.getContainer());
 
     // Code modal
     this.codeModal = new CodeModal();
     this.uiContainer.addChild(this.codeModal.getContainer());
+
+    // Test modal
+    this.testModal = new TestModal();
+    this.uiContainer.addChild(this.testModal.getContainer());
 
     this.gameState.setPhase(PHASES.SETUP);
 
@@ -159,6 +233,9 @@ export default class LevelScene {
       if (levelParam) return levelParam;
       return { name, type: '', placeholder: '' };
     });
+
+    // Check if player has weapons
+    const hasWeapons = this.weaponInventory.getAll().length > 0;
 
     // Create weapon slots positioned above the entry point
     this.weaponSlots = new WeaponSlots(this.spriteManager, this.soundManager);
@@ -182,12 +259,196 @@ export default class LevelScene {
     this.weaponSidebar.show();
     this.uiContainer.addChild(this.weaponSidebar);
 
-    // Enable stage-level pointer events for drag
+    // Show "no weapons" prompt if inventory is empty
+    if (!hasWeapons) {
+      this._showNoWeaponsPrompt();
+    }
+
+    // Enable stage-level pointer events for drag (cover full screen)
+    const gameApp = this.sceneManager.gameApp;
+    const screenW = gameApp.getScreenWidth();
+    const screenH = gameApp.getScreenHeight();
     this.container.eventMode = 'static';
-    this.container.hitArea = new PIXI.Rectangle(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    this.container.hitArea = new PIXI.Rectangle(0, 0, screenW, screenH);
     this.container.on('pointermove', this._onPointerMove);
     this.container.on('pointerup', this._onPointerUp);
     this.container.on('pointerupoutside', this._onPointerUp);
+  }
+
+  _showNoWeaponsPrompt() {
+    this.noWeaponsOverlay = new PIXI.Container();
+
+    // Semi-transparent background
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x000000, 0.7);
+    bg.drawRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    bg.endFill();
+    bg.eventMode = 'static';
+    this.noWeaponsOverlay.addChild(bg);
+
+    // Panel
+    const panelW = 420;
+    const panelH = 200;
+    const panel = new PIXI.Graphics();
+    panel.beginFill(0x1a1a3e);
+    panel.lineStyle(2, 0xffaa44);
+    panel.drawRoundedRect((VIEWPORT_WIDTH - panelW) / 2, (VIEWPORT_HEIGHT - panelH) / 2, panelW, panelH, 10);
+    panel.endFill();
+    this.noWeaponsOverlay.addChild(panel);
+
+    // Title
+    const title = new PIXI.Text('No Weapons Yet!', {
+      fontFamily: 'monospace',
+      fontSize: 22,
+      fontWeight: 'bold',
+      fill: 0xffaa44,
+    });
+    title.anchor.set(0.5);
+    title.x = VIEWPORT_WIDTH / 2;
+    title.y = VIEWPORT_HEIGHT / 2 - 55;
+    this.noWeaponsOverlay.addChild(title);
+
+    // Description
+    const desc = new PIXI.Text('To explore this dungeon, you need to forge weapons first.\nWeapons are test inputs (numbers, strings, arrays, etc.)\nthat you drag into the function parameter slots.', {
+      fontFamily: 'monospace',
+      fontSize: 12,
+      fill: 0xaaaacc,
+      align: 'center',
+    });
+    desc.anchor.set(0.5);
+    desc.x = VIEWPORT_WIDTH / 2;
+    desc.y = VIEWPORT_HEIGHT / 2;
+    this.noWeaponsOverlay.addChild(desc);
+
+    // Go to Forge button
+    const forgeBtn = new Button('Go to Forge', 140, 38, this.soundManager);
+    forgeBtn.x = VIEWPORT_WIDTH / 2 - 150;
+    forgeBtn.y = VIEWPORT_HEIGHT / 2 + 50;
+    forgeBtn.onClick(() => {
+      this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
+    });
+    this.noWeaponsOverlay.addChild(forgeBtn);
+
+    // Back to Menu button
+    const backBtn = new Button('Back to Menu', 140, 38, this.soundManager);
+    backBtn.x = VIEWPORT_WIDTH / 2 + 10;
+    backBtn.y = VIEWPORT_HEIGHT / 2 + 50;
+    backBtn.onClick(() => {
+      this.sceneManager.switchTo('title');
+    });
+    this.noWeaponsOverlay.addChild(backBtn);
+
+    this.uiContainer.addChild(this.noWeaponsOverlay);
+  }
+
+  _hideNoWeaponsPrompt() {
+    if (this.noWeaponsOverlay) {
+      this.uiContainer.removeChild(this.noWeaponsOverlay);
+      this.noWeaponsOverlay = null;
+    }
+  }
+
+  _showExecutionError(error) {
+    // Play error sound
+    if (this.soundManager) {
+      this.soundManager.play('error');
+    }
+
+    // Create error overlay
+    const overlay = new PIXI.Container();
+
+    // Semi-transparent background
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x000000, 0.8);
+    bg.drawRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    bg.endFill();
+    bg.eventMode = 'static';
+    overlay.addChild(bg);
+
+    // Error panel
+    const panelW = 500;
+    const panelH = 220;
+    const panel = new PIXI.Graphics();
+    panel.beginFill(0x2a1a1a);
+    panel.lineStyle(3, 0xff4444);
+    panel.drawRoundedRect((VIEWPORT_WIDTH - panelW) / 2, (VIEWPORT_HEIGHT - panelH) / 2, panelW, panelH, 10);
+    panel.endFill();
+    overlay.addChild(panel);
+
+    // Error icon/title
+    const title = new PIXI.Text('⚠ Execution Error', {
+      fontFamily: 'monospace',
+      fontSize: 20,
+      fontWeight: 'bold',
+      fill: 0xff4444,
+    });
+    title.anchor.set(0.5);
+    title.x = VIEWPORT_WIDTH / 2;
+    title.y = VIEWPORT_HEIGHT / 2 - 70;
+    overlay.addChild(title);
+
+    // Error message
+    const errorMsg = error.message || String(error);
+    const msgText = new PIXI.Text(errorMsg, {
+      fontFamily: 'monospace',
+      fontSize: 13,
+      fill: 0xffaaaa,
+      wordWrap: true,
+      wordWrapWidth: panelW - 40,
+      align: 'center',
+    });
+    msgText.anchor.set(0.5);
+    msgText.x = VIEWPORT_WIDTH / 2;
+    msgText.y = VIEWPORT_HEIGHT / 2 - 20;
+    overlay.addChild(msgText);
+
+    // Hint
+    const hint = new PIXI.Text('Check your input values and try again.', {
+      fontFamily: 'monospace',
+      fontSize: 11,
+      fill: 0x888899,
+    });
+    hint.anchor.set(0.5);
+    hint.x = VIEWPORT_WIDTH / 2;
+    hint.y = VIEWPORT_HEIGHT / 2 + 30;
+    overlay.addChild(hint);
+
+    // OK button
+    const btnW = 100;
+    const btnH = 32;
+    const btn = new PIXI.Graphics();
+    btn.beginFill(0x553333);
+    btn.lineStyle(2, 0xff6666);
+    btn.drawRoundedRect((VIEWPORT_WIDTH - btnW) / 2, VIEWPORT_HEIGHT / 2 + 55, btnW, btnH, 6);
+    btn.endFill();
+    btn.eventMode = 'static';
+    btn.cursor = 'pointer';
+    overlay.addChild(btn);
+
+    const btnLabel = new PIXI.Text('OK', {
+      fontFamily: 'monospace',
+      fontSize: 14,
+      fontWeight: 'bold',
+      fill: 0xffffff,
+    });
+    btnLabel.anchor.set(0.5);
+    btnLabel.x = VIEWPORT_WIDTH / 2;
+    btnLabel.y = VIEWPORT_HEIGHT / 2 + 55 + btnH / 2;
+    overlay.addChild(btnLabel);
+
+    // Close on button click or background click
+    const closeOverlay = () => {
+      this.uiContainer.removeChild(overlay);
+      overlay.destroy({ children: true });
+      // Return to setup phase
+      this.gameState.setPhase(PHASES.SETUP);
+      this.weaponSlots.reset();
+    };
+
+    btn.on('pointertap', closeOverlay);
+    bg.on('pointertap', closeOverlay);
+
+    this.uiContainer.addChild(overlay);
   }
 
   _hideWeaponUI() {
@@ -275,11 +536,28 @@ export default class LevelScene {
     }
 
     // Execute the function with user-provided values as stubs
-    const { coverageData } = await this.coverageRunner.execute(
+    const { coverageData, result, error } = await this.coverageRunner.execute(
       this.levelData.source,
       this.levelData.fnName,
       values
     );
+
+    // Handle execution error - show alert and return to setup
+    if (error) {
+      console.log('%c[LevelScene] Function execution error:', 'color: #ff6644;', error);
+      console.log('%c[LevelScene] Error message:', 'color: #ff6644;', error?.message);
+      console.log('%c[LevelScene] Error stack:', 'color: #ff6644;', error?.stack);
+      this._showExecutionError(error);
+      return;
+    }
+
+    console.log('%c[LevelScene] Execution succeeded:', 'color: #44ff44;');
+    console.log('%c[LevelScene] Result type:', 'color: #44ff44;', typeof result);
+    console.log('%c[LevelScene] Result value:', 'color: #44ff44;', result);
+    console.log('%c[LevelScene] Coverage data:', 'color: #44ff44;', coverageData ? 'present' : 'null');
+
+    // Store the current inputs for test tracking
+    this._currentRunInputs = values;
 
     if (coverageData) {
       this.coverageData = coverageData;
@@ -296,6 +574,9 @@ export default class LevelScene {
 
       const coveredGems = this.coverageMapper.getCoveredGemIds(coverageData);
 
+      console.log('[Execute] Covered gem IDs:', [...coveredGems]);
+      console.log('[Execute] All gems in manager:', [...this.gemManager.gems.keys()]);
+
       // Build waypoints for ALL covered gems (hero walks the full execution path)
       // and track which ones can still be collected (not already green)
       this.coveredGemPositions = new Set();
@@ -303,17 +584,25 @@ export default class LevelScene {
       for (const gemId of coveredGems) {
         const gem = this.gemManager.gems.get(gemId);
         if (gem) {
+          console.log(`[Execute] Gem ${gemId} at (${gem.x}, ${gem.y}) walkable:`, this.dungeonMap.isWalkable(gem.x, gem.y));
+          // Get the layout gem info which has loc
+          const layoutGem = this.currentLayout.gems.find(g => g.id === gemId);
+          const line = layoutGem?.loc?.start?.line || 0;
+          const column = layoutGem?.loc?.start?.column || 0;
           // Hero walks through all covered gems
-          gemWaypoints.push({ x: gem.x, y: gem.y });
+          gemWaypoints.push({ x: gem.x, y: gem.y, id: gemId, line, column });
           // Only mark for collection if not already collected
           if (!gem.collected) {
             this.coveredGemPositions.add(`${gem.x},${gem.y}`);
           }
+        } else {
+          console.warn(`[Execute] Gem ${gemId} not found in gem manager!`);
         }
       }
 
-      // Sort waypoints by Y then X (top-to-bottom execution order)
-      gemWaypoints.sort((a, b) => a.y - b.y || a.x - b.x);
+      // Sort waypoints by source line number (execution order in code)
+      gemWaypoints.sort((a, b) => a.line - b.line || a.column - b.column);
+      console.log('[Execute] Sorted waypoints by line:', gemWaypoints);
 
       // Build full walk path: entry → gem1 → gem2 → ... using BFS
       const fullPath = this._buildWalkPath(gemWaypoints);
@@ -339,25 +628,50 @@ export default class LevelScene {
     let curX = this.player.gridX;
     let curY = this.player.gridY;
 
+    console.log('[WalkPath] Building path from', curX, curY);
+    console.log('[WalkPath] Waypoints:', gemWaypoints);
+
     for (const wp of gemWaypoints) {
-      if (wp.x === curX && wp.y === curY) continue; // already there
+      if (wp.x === curX && wp.y === curY) {
+        console.log('[WalkPath] Already at waypoint', wp.x, wp.y);
+        continue;
+      }
 
       const segment = this._bfs(curX, curY, wp.x, wp.y);
       if (segment) {
+        console.log('[WalkPath] Found path from', curX, curY, 'to', wp.x, wp.y, '- length:', segment.length);
         // Skip the first tile of each segment (it's the current position)
         for (let i = 1; i < segment.length; i++) {
           path.push(segment[i]);
         }
-        curX = wp.x;
-        curY = wp.y;
+      } else {
+        // No path found - just jump directly to this waypoint
+        // This handles cases like break statements where layout might have gaps
+        console.warn('[WalkPath] NO PATH from', curX, curY, 'to', wp.x, wp.y, '- jumping directly');
+        path.push({ x: wp.x, y: wp.y });
       }
+      // Always update current position to this waypoint
+      curX = wp.x;
+      curY = wp.y;
     }
 
+    console.log('[WalkPath] Final path length:', path.length);
     return path;
   }
 
   _bfs(sx, sy, ex, ey) {
     if (sx === ex && sy === ey) return [{ x: sx, y: sy }];
+
+    // Debug: check if start and end are walkable
+    const startWalkable = this.dungeonMap.isWalkable(sx, sy);
+    const endWalkable = this.dungeonMap.isWalkable(ex, ey);
+    if (!startWalkable || !endWalkable) {
+      console.warn(`[BFS] Start (${sx},${sy}) walkable: ${startWalkable}, End (${ex},${ey}) walkable: ${endWalkable}`);
+      if (!endWalkable) {
+        const tileType = this.dungeonMap.getTileType(ex, ey);
+        console.warn(`[BFS] End tile type: ${tileType}`);
+      }
+    }
 
     const queue = [{ x: sx, y: sy }];
     const visited = new Set();
@@ -391,7 +705,9 @@ export default class LevelScene {
       }
     }
 
-    return null; // No path found
+    // Path not found - log diagnostic info
+    console.warn(`[BFS] NO PATH from (${sx},${sy}) to (${ex},${ey}). Visited ${visited.size} tiles.`);
+    return null;
   }
 
   _updateAnimating(delta) {
@@ -414,6 +730,20 @@ export default class LevelScene {
       // Mark all covered gems based on actual coverage data
       this._markCoveredGemsFromCoverage();
 
+      // If we have 100% coverage but still have uncollected gems, force collect them
+      // This handles cases where the line:column mapping isn't perfect
+      const stmtCov = this.coverageTracker.getStatementCoverage();
+      if (stmtCov.percent >= 100) {
+        console.log('[LevelScene] 100% coverage - force collecting any remaining gems');
+        for (const [gemId, gem] of this.gemManager.gems) {
+          if (!gem.collected) {
+            console.log(`[LevelScene] Force collecting gem ${gemId}`);
+            this.gemManager.collectGem(gemId);
+            this.gameState.collectGem(gemId);
+          }
+        }
+      }
+
       // Dim uncovered gems after a brief pause
       setTimeout(() => {
         this.gemManager.dimUncovered();
@@ -434,8 +764,21 @@ export default class LevelScene {
   }
 
   _markCoveredGemsFromCoverage() {
-    // Use the CoverageMapper to get covered gem IDs
-    const coveredGemIds = this.coverageMapper.getCoveredGemIds(this.coverageData);
+    // Use the AGGREGATED coverage to get all covered gem IDs across all runs
+    const aggregated = this.coverageTracker.getAggregatedCoverage();
+    if (!aggregated) return;
+
+    // Rebuild mapping with aggregated coverage (statementMap is the same)
+    this.coverageMapper.buildMapping(
+      aggregated,
+      this.currentLayout.gems,
+      this.currentLayout.tileData
+    );
+
+    const coveredGemIds = this.coverageMapper.getCoveredGemIds(aggregated);
+
+    console.log('[MarkCovered] Aggregated coverage - covered gems:', [...coveredGemIds]);
+    console.log('[MarkCovered] All gems in manager:', [...this.gemManager.gems.keys()]);
 
     // Mark those gems as collected
     for (const gemId of coveredGemIds) {
@@ -443,8 +786,42 @@ export default class LevelScene {
       if (gem && !gem.collected) {
         this.gemManager.collectGem(gemId);
         this.gameState.collectGem(gemId);
+        console.log(`[MarkCovered] Collected gem ${gemId}`);
       }
     }
+
+    // Debug: check for any uncollected gems
+    for (const [gemId, gem] of this.gemManager.gems) {
+      if (!gem.collected) {
+        console.warn(`[MarkCovered] Gem ${gemId} at (${gem.x}, ${gem.y}) is still uncollected!`);
+      }
+    }
+  }
+
+  _describeInputs(inputs) {
+    if (!inputs) return 'no inputs';
+    const parts = [];
+    for (const [key, value] of Object.entries(inputs)) {
+      if (value && value.__stub) {
+        const ret = value.returns;
+        if (ret === undefined) {
+          parts.push(`${key} as stub`);
+        } else {
+          parts.push(`${key} stub→${JSON.stringify(ret).substring(0, 20)}`);
+        }
+      } else if (typeof value === 'number') {
+        parts.push(`${key}=${value}`);
+      } else if (typeof value === 'boolean') {
+        parts.push(`${key}=${value}`);
+      } else if (typeof value === 'string') {
+        parts.push(`${key}="${value.substring(0, 10)}${value.length > 10 ? '...' : ''}"`);
+      } else if (Array.isArray(value)) {
+        parts.push(`${key}[${value.length}]`);
+      } else if (typeof value === 'object') {
+        parts.push(`${key}={...}`);
+      }
+    }
+    return parts.join(', ') || 'given inputs';
   }
 
   _getPreviouslyCoveredGemIds() {
@@ -473,12 +850,131 @@ export default class LevelScene {
       stmtCov.total
     );
 
-    this.gameState.setPhase(PHASES.RESULTS);
-    this.sceneManager.switchTo('result', {
-      gameState: this.gameState,
-      levelScene: this,
-      coverageTracker: this.coverageTracker,
-    });
+    const isComplete = this.coverageTracker.isFullCoverage();
+
+    // Save the test case (inputs only - coverage is computed by replaying tests)
+    if (this._currentRunInputs) {
+      const description = this._describeInputs(this._currentRunInputs);
+      const testCase = {
+        description,
+        inputs: this._currentRunInputs,
+      };
+      this.testRuns.push(testCase);
+
+      // Save test to localStorage
+      if (this.progressManager) {
+        this.progressManager.addTest(this.gameState.currentLevel, testCase);
+      }
+    }
+
+    // Mark level complete if 100% coverage
+    if (isComplete && this.progressManager) {
+      this.progressManager.markLevelCompleted(this.gameState.currentLevel, this.gameState.score);
+    }
+
+    // Check if level is complete (100% coverage)
+    if (isComplete) {
+      // Show Level Complete screen
+      this.gameState.setPhase(PHASES.RESULTS);
+      this.sceneManager.switchTo('result', {
+        gameState: this.gameState,
+        levelScene: this,
+        coverageTracker: this.coverageTracker,
+      });
+    } else {
+      // Not complete - play sound and return hero to start for another run
+      if (this.soundManager) {
+        this.soundManager.play('sceneTransition');
+      }
+      this._returnToStart();
+    }
+  }
+
+  _returnToStart() {
+    // Fade out hero, teleport to entry, fade in, then start next run
+    this.gameState.setPhase(PHASES.RETURNING);
+
+    // Fade out
+    const playerContainer = this.player.getContainer();
+    let alpha = 1;
+    const fadeOut = () => {
+      alpha -= 0.1;
+      playerContainer.alpha = alpha;
+      if (alpha > 0) {
+        requestAnimationFrame(fadeOut);
+      } else {
+        // Teleport to entry
+        this.player.setPosition(this.currentLayout.entry.x, this.currentLayout.entry.y);
+        this.camera.snapTo(this.currentLayout.entry.x, this.currentLayout.entry.y);
+
+        // Fade in
+        const fadeIn = () => {
+          alpha += 0.1;
+          playerContainer.alpha = alpha;
+          if (alpha < 1) {
+            requestAnimationFrame(fadeIn);
+          } else {
+            playerContainer.alpha = 1;
+            // Start next run
+            this._startRun();
+          }
+        };
+        requestAnimationFrame(fadeIn);
+      }
+    };
+    requestAnimationFrame(fadeOut);
+  }
+
+  _logDungeonLayout() {
+    const layout = this.currentLayout;
+    const TILE_NAMES = {
+      0: '.',  // EMPTY
+      1: 'F',  // FLOOR
+      2: '#',  // WALL
+      3: '?',  // BRANCH
+      4: 'M',  // MERGE
+      5: 'E',  // EXIT
+      6: 'S',  // ENTRY
+      7: '-',  // CORRIDOR_H
+      8: '|',  // CORRIDOR_V
+      9: '<',  // DOOR_LEFT
+      10: '>', // DOOR_RIGHT
+      11: 'L', // LOOP_BACK
+      12: 'C', // CATCH_ENTRY
+    };
+
+    console.log('%c=== DUNGEON LAYOUT ===', 'color: #44aaff; font-weight: bold; font-size: 14px;');
+    console.log('Level:', this.levelData.name);
+    console.log('Grid size:', layout.width, 'x', layout.height);
+    console.log('Entry:', layout.entry);
+    console.log('Exit:', layout.exit);
+
+    // Print ASCII grid
+    console.log('%cGrid:', 'color: #ffaa44; font-weight: bold;');
+    let gridStr = '';
+    for (let y = 0; y < layout.grid.length; y++) {
+      let row = y.toString().padStart(2) + ' ';
+      for (let x = 0; x < layout.grid[y].length; x++) {
+        const tile = layout.grid[y][x];
+        row += TILE_NAMES[tile] || '?';
+      }
+      gridStr += row + '\n';
+    }
+    console.log(gridStr);
+
+    // Print gem positions
+    console.log('%cGems:', 'color: #ffaa44; font-weight: bold;');
+    for (const gem of layout.gems) {
+      console.log(`  ${gem.id}: (${gem.x}, ${gem.y}) - line ${gem.loc?.start?.line || '?'}`);
+    }
+
+    // Print branch positions
+    console.log('%cBranches:', 'color: #ffaa44; font-weight: bold;');
+    for (const branch of layout.branches) {
+      console.log(`  ${branch.id}: (${branch.x}, ${branch.y}) - condition: ${branch.condition?.slice(0, 30) || '?'}`);
+    }
+
+    console.log('%c=== END LAYOUT ===', 'color: #44aaff; font-weight: bold;');
   }
 
   update(delta) {
@@ -497,6 +993,9 @@ export default class LevelScene {
       case PHASES.ANIMATING:
         this._updateAnimating(delta);
         break;
+      case PHASES.RETURNING:
+        this._updateReturning(delta);
+        break;
       case PHASES.RESULTS:
         // Handled by result scene
         break;
@@ -508,6 +1007,34 @@ export default class LevelScene {
     if (this.hud) {
       this.hud.update(this.gameState);
     }
+  }
+
+  _updateReturning(delta) {
+    // Fade animation is handled by requestAnimationFrame in _returnToStart
+    // Just keep gems animating
+  }
+
+  _resetTests() {
+    // Clear test runs
+    this.testRuns = [];
+
+    // Clear saved tests in progress manager
+    if (this.progressManager) {
+      this.progressManager.clearLevelTests(this.gameState.currentLevel);
+    }
+
+    // Reset coverage tracker
+    this.coverageTracker.reset();
+
+    // Play sound
+    if (this.soundManager) {
+      this.soundManager.play('sceneTransition');
+    }
+
+    console.log('[LevelScene] Tests reset for level', this.gameState.currentLevel);
+
+    // Restart the level
+    this._startRun();
   }
 
   replayLevel() {

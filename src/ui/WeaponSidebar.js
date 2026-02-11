@@ -2,8 +2,7 @@ import * as PIXI from 'pixi.js';
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, COLORS } from '../constants.js';
 import SpriteManager from '../engine/SpriteManager.js';
 
-const SIDEBAR_W = 130;
-const TAB_W = 28;
+const SIDEBAR_W = 140;
 const ITEM_H = 36;
 const ITEM_PAD = 4;
 
@@ -12,58 +11,18 @@ export default class WeaponSidebar extends PIXI.Container {
     super();
     this.spriteManager = spriteManager;
     this.weaponInventory = weaponInventory;
-    this.expanded = true;
     this._onDragStartCb = null;
 
-    this.panelContainer = new PIXI.Container();
-    this.addChild(this.panelContainer);
-
-    // Toggle tab
-    this.tab = this._createTab();
-    this.addChild(this.tab);
-
     this.itemContainer = new PIXI.Container();
-    this.panelContainer.addChild(this.itemContainer);
+    this.addChild(this.itemContainer);
 
     this._layout();
-  }
-
-  _createTab() {
-    const tab = new PIXI.Container();
-    const bg = new PIXI.Graphics();
-    bg.beginFill(COLORS.PANEL_BG);
-    bg.lineStyle(1, COLORS.PANEL_BORDER);
-    bg.drawRoundedRect(0, 0, TAB_W, 60, 4);
-    bg.endFill();
-    tab.addChild(bg);
-
-    const label = new PIXI.Text('\u2694', {
-      fontFamily: 'monospace',
-      fontSize: 18,
-      fill: 0xffaa44,
-    });
-    label.anchor.set(0.5);
-    label.x = TAB_W / 2;
-    label.y = 30;
-    tab.addChild(label);
-
-    tab.eventMode = 'static';
-    tab.cursor = 'pointer';
-    tab.on('pointertap', () => this.toggle());
-    return tab;
   }
 
   _layout() {
-    const panelX = this.expanded ? VIEWPORT_WIDTH - SIDEBAR_W : VIEWPORT_WIDTH;
-    this.panelContainer.x = panelX;
-    this.panelContainer.y = 70; // below weapon slots area
-    this.tab.x = panelX - TAB_W;
-    this.tab.y = 70;
-  }
-
-  toggle() {
-    this.expanded = !this.expanded;
-    this._layout();
+    // Position sidebar on the right side
+    this.x = VIEWPORT_WIDTH - SIDEBAR_W - 10;
+    this.y = 54; // Below HUD
   }
 
   show() {
@@ -80,7 +39,7 @@ export default class WeaponSidebar extends PIXI.Container {
 
     // Panel background
     const weapons = this.weaponInventory.getAll();
-    const panelH = Math.max(100, weapons.length * (ITEM_H + ITEM_PAD) + 40);
+    const panelH = Math.max(120, weapons.length * (ITEM_H + ITEM_PAD) + 50);
 
     const bg = new PIXI.Graphics();
     bg.beginFill(COLORS.PANEL_BG, 0.92);
@@ -90,31 +49,41 @@ export default class WeaponSidebar extends PIXI.Container {
     this.itemContainer.addChild(bg);
 
     // Title
-    const title = new PIXI.Text('Weapons', {
+    const title = new PIXI.Text('⚔ Weapons', {
       fontFamily: 'monospace',
-      fontSize: 11,
+      fontSize: 12,
       fill: 0xffaa44,
       fontWeight: 'bold',
     });
-    title.x = 8;
-    title.y = 6;
+    title.x = 10;
+    title.y = 8;
     this.itemContainer.addChild(title);
 
+    // Drag hint
+    const hint = new PIXI.Text('Drag to slots ↓', {
+      fontFamily: 'monospace',
+      fontSize: 9,
+      fill: 0x666688,
+    });
+    hint.x = 10;
+    hint.y = 26;
+    this.itemContainer.addChild(hint);
+
     if (weapons.length === 0) {
-      const empty = new PIXI.Text('(empty)\nForge some\nweapons!', {
+      const empty = new PIXI.Text('(empty)\n\nGo to Forge\nto create\nweapons!', {
         fontFamily: 'monospace',
         fontSize: 10,
         fill: 0x666688,
         align: 'center',
       });
       empty.x = SIDEBAR_W / 2;
-      empty.y = 50;
+      empty.y = 60;
       empty.anchor.set(0.5, 0);
       this.itemContainer.addChild(empty);
       return;
     }
 
-    let yOff = 24;
+    let yOff = 44;
     for (const weapon of weapons) {
       const item = this._createWeaponItem(weapon, yOff);
       this.itemContainer.addChild(item);
@@ -132,18 +101,18 @@ export default class WeaponSidebar extends PIXI.Container {
     const bg = new PIXI.Graphics();
     bg.beginFill(0x1a1a3e, 0.8);
     bg.lineStyle(1, weapon.color, 0.4);
-    bg.drawRoundedRect(0, 0, SIDEBAR_W - 8, ITEM_H, 4);
+    bg.drawRoundedRect(0, 0, SIDEBAR_W - 12, ITEM_H, 4);
     bg.endFill();
     item.addChild(bg);
-    item.x = 4;
+    item.x = 6;
 
     // Weapon icon
     const texKey = SpriteManager.textureKeyForType(weapon.type);
     const icon = new PIXI.Sprite(this.spriteManager.getTexture(texKey));
-    icon.width = 22;
-    icon.height = 22;
+    icon.width = 24;
+    icon.height = 24;
     icon.x = 4;
-    icon.y = (ITEM_H - 22) / 2;
+    icon.y = (ITEM_H - 24) / 2;
     item.addChild(icon);
 
     // Weapon name
@@ -152,9 +121,9 @@ export default class WeaponSidebar extends PIXI.Container {
       fontSize: 9,
       fill: weapon.color,
       wordWrap: true,
-      wordWrapWidth: SIDEBAR_W - 42,
+      wordWrapWidth: SIDEBAR_W - 50,
     });
-    nameText.x = 30;
+    nameText.x = 32;
     nameText.y = (ITEM_H - 14) / 2;
     item.addChild(nameText);
 

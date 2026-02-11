@@ -21,7 +21,8 @@ export default class GemManager {
       sprite.anchor.set(0.5, 0.5);
       sprite.x = gem.x * TILE_SIZE + TILE_SIZE / 2;
       sprite.y = gem.y * TILE_SIZE + TILE_SIZE / 2;
-      sprite.scale.set(2, 2); // Scale 16x16 to 32x32
+      const scale = TILE_SIZE / 16;
+      sprite.scale.set(scale, scale);
 
       this.container.addChild(sprite);
       this.gems.set(gem.id, {

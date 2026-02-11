@@ -8,8 +8,9 @@ export default class HUD {
     this.container = new PIXI.Container();
     this.soundManager = soundManager;
     this.onCodeButton = null;
-    this.onRunButton = null;
+    this.onTestButton = null;
     this.onForgeButton = null;
+    this.onResetButton = null;
 
     // Background bar
     const bg = new PIXI.Graphics();
@@ -40,7 +41,7 @@ export default class HUD {
     this.container.addChild(this.runText);
 
     // View Code button
-    this.codeBtn = new Button('{ } Code', 80, 28);
+    this.codeBtn = new Button('{} Code ', 80, 28);
     this.codeBtn.x = 110;
     this.codeBtn.y = 8;
     this.codeBtn.onClick(() => {
@@ -48,27 +49,36 @@ export default class HUD {
     });
     this.container.addChild(this.codeBtn);
 
-    // Run button
-    this.runBtn = new Button('Run', 60, 28);
-    this.runBtn.x = 200;
-    this.runBtn.y = 8;
-    this.runBtn.onClick(() => {
-      if (this.onRunButton) this.onRunButton();
+    // View Test button
+    this.testBtn = new Button(' {} Test', 80, 28);
+    this.testBtn.x = 200;
+    this.testBtn.y = 8;
+    this.testBtn.onClick(() => {
+      if (this.onTestButton) this.onTestButton();
     });
-    this.container.addChild(this.runBtn);
+    this.container.addChild(this.testBtn);
 
     // Forge button
     this.forgeBtn = new Button('Forge', 70, 28);
-    this.forgeBtn.x = 270;
+    this.forgeBtn.x = 290;
     this.forgeBtn.y = 8;
     this.forgeBtn.onClick(() => {
       if (this.onForgeButton) this.onForgeButton();
     });
     this.container.addChild(this.forgeBtn);
 
+    // Reset Tests button
+    this.resetBtn = new Button('Reset', 60, 28);
+    this.resetBtn.x = 370;
+    this.resetBtn.y = 8;
+    this.resetBtn.onClick(() => {
+      if (this.onResetButton) this.onResetButton();
+    });
+    this.container.addChild(this.resetBtn);
+
     // Coverage progress bar
-    this.coverageBar = new ProgressBar(180, 14);
-    this.coverageBar.x = VIEWPORT_WIDTH - 280;
+    this.coverageBar = new ProgressBar(320, 14);
+    this.coverageBar.x = VIEWPORT_WIDTH - 440;
     this.coverageBar.y = 6;
     this.container.addChild(this.coverageBar);
 
@@ -78,17 +88,17 @@ export default class HUD {
       fontSize: 10,
       fill: 0xaaaacc,
     });
-    this.coverageLabel.x = VIEWPORT_WIDTH - 280;
+    this.coverageLabel.x = VIEWPORT_WIDTH - 440;
     this.coverageLabel.y = 26;
     this.container.addChild(this.coverageLabel);
 
-    // Gems counter
+    // Gems counter (positioned left of mute button)
     this.gemsText = new PIXI.Text('Gems: 0/0', {
       fontFamily: 'monospace',
       fontSize: 11,
       fill: 0x44aaff,
     });
-    this.gemsText.x = VIEWPORT_WIDTH - 90;
+    this.gemsText.x = VIEWPORT_WIDTH - 130;
     this.gemsText.y = 26;
     this.container.addChild(this.gemsText);
 
@@ -170,8 +180,7 @@ export default class HUD {
     this.coverageLabel.text = `Stmt: ${Math.round(gameState.coveragePercent)}% | Branch: ${Math.round(gameState.branchCoveragePercent)}%`;
     this.gemsText.text = `Gems: ${gameState.collectedGems.size}/${gameState.totalGems}`;
 
-    // Show/hide Run and Forge buttons based on phase
-    this.runBtn.visible = gameState.phase === PHASES.SETUP;
+    // Show/hide Forge button based on phase
     this.forgeBtn.visible = gameState.phase === PHASES.SETUP;
 
     // Sync mute button state

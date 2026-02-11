@@ -15,6 +15,11 @@ export default class VictoryScene {
     this.container.removeChildren();
     this.particles = [];
 
+    // Get actual screen dimensions
+    const gameApp = this.sceneManager.gameApp;
+    this.screenW = gameApp.getScreenWidth();
+    this.screenH = gameApp.getScreenHeight();
+
     // Play victory fanfare
     if (this.soundManager) {
       this.soundManager.play('victory');
@@ -23,7 +28,7 @@ export default class VictoryScene {
     // Background
     const bg = new PIXI.Graphics();
     bg.beginFill(0x0a0a1e);
-    bg.drawRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    bg.drawRect(0, 0, this.screenW, this.screenH);
     bg.endFill();
     this.container.addChild(bg);
 
@@ -41,7 +46,7 @@ export default class VictoryScene {
       align: 'center',
     });
     title.anchor.set(0.5);
-    title.x = VIEWPORT_WIDTH / 2;
+    title.x = this.screenW / 2;
     title.y = 140;
     this.container.addChild(title);
 
@@ -53,7 +58,7 @@ export default class VictoryScene {
       align: 'center',
     });
     sub1.anchor.set(0.5);
-    sub1.x = VIEWPORT_WIDTH / 2;
+    sub1.x = this.screenW / 2;
     sub1.y = 200;
     this.container.addChild(sub1);
 
@@ -64,7 +69,7 @@ export default class VictoryScene {
       align: 'center',
     });
     sub2.anchor.set(0.5);
-    sub2.x = VIEWPORT_WIDTH / 2;
+    sub2.x = this.screenW / 2;
     sub2.y = 240;
     this.container.addChild(sub2);
 
@@ -75,13 +80,13 @@ export default class VictoryScene {
       align: 'center',
     });
     sub3.anchor.set(0.5);
-    sub3.x = VIEWPORT_WIDTH / 2;
+    sub3.x = this.screenW / 2;
     sub3.y = 265;
     this.container.addChild(sub3);
 
     // Play again button
     const btn = new Button('Play Again', 200, 40);
-    btn.x = (VIEWPORT_WIDTH - 200) / 2;
+    btn.x = (this.screenW - 200) / 2;
     btn.y = 340;
     btn.onClick(() => {
       this.sceneManager.switchTo('title', { unlockedLevels: 7 });
@@ -97,8 +102,8 @@ export default class VictoryScene {
       g.beginFill(color, 0.7);
       g.drawRect(0, 0, 4, 4);
       g.endFill();
-      g.x = Math.random() * VIEWPORT_WIDTH;
-      g.y = Math.random() * VIEWPORT_HEIGHT;
+      g.x = Math.random() * this.screenW;
+      g.y = Math.random() * this.screenH;
       this.particleContainer.addChild(g);
       this.particles.push({
         sprite: g,
@@ -116,8 +121,8 @@ export default class VictoryScene {
       p.sprite.y += p.vy;
       p.life -= delta;
       if (p.sprite.y < -10 || p.life <= 0) {
-        p.sprite.x = Math.random() * VIEWPORT_WIDTH;
-        p.sprite.y = VIEWPORT_HEIGHT + 10;
+        p.sprite.x = Math.random() * this.screenW;
+        p.sprite.y = this.screenH + 10;
         p.vy = -Math.random() * 2 - 0.5;
         p.life = Math.random() * 200;
       }
