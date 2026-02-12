@@ -174,9 +174,11 @@ export function layoutCFG(cfgRoot) {
         const mergeRow = Math.max(leftEnd, rightEnd) + 1;
         setTile(mergeRow, col, TILE_TYPES.MERGE);
 
-        // Connect branches back to merge
-        placeVerticalCorridor(leftCenter, leftEnd, mergeRow);
-        placeVerticalCorridor(rightCenter, rightEnd, mergeRow);
+        // Connect branches back to merge (start from last gem row to ensure connectivity)
+        const leftCorridorStart = Math.max(row + 2, leftEnd - 1);
+        const rightCorridorStart = Math.max(row + 2, rightEnd - 1);
+        placeVerticalCorridor(leftCenter, leftCorridorStart, mergeRow);
+        placeVerticalCorridor(rightCenter, rightCorridorStart, mergeRow);
         placeHorizontalCorridor(mergeRow, leftCenter, col);
         placeHorizontalCorridor(mergeRow, col, rightCenter);
 
@@ -230,7 +232,9 @@ export function layoutCFG(cfgRoot) {
         setTile(mergeRow, col, TILE_TYPES.MERGE);
 
         for (let i = 0; i < caseCount; i++) {
-          placeVerticalCorridor(caseCenters[i], caseEnds[i], mergeRow);
+          // Start corridor from last gem row (caseEnds[i] - 1) to ensure connectivity
+          const corridorStart = Math.max(row + 2, caseEnds[i] - 1);
+          placeVerticalCorridor(caseCenters[i], corridorStart, mergeRow);
           placeHorizontalCorridor(mergeRow, caseCenters[i], col);
         }
 
@@ -272,6 +276,10 @@ export function layoutCFG(cfgRoot) {
         placeVerticalCorridor(col + 1, row, bodyEnd);
         setTile(row, col + 1, TILE_TYPES.CORRIDOR_H);
 
+        // Add corridor from loop body to exit (connects to code after loop)
+        // This ensures there's a walkable path from inside the loop to after it
+        placeVerticalCorridor(col, row, bodyEnd + 1);
+
         return bodyEnd + 1;
       }
 
@@ -291,11 +299,13 @@ export function layoutCFG(cfgRoot) {
         // Catch body
         const catchEnd = layoutNode(node.catchBody, row + 1, catchCenter);
 
-        // Merge after try/catch
+        // Merge after try/catch (start corridors from last gem row)
         const mergeRow = Math.max(tryEnd, catchEnd) + 1;
         setTile(mergeRow, col, TILE_TYPES.MERGE);
-        placeVerticalCorridor(tryCenter, tryEnd, mergeRow);
-        placeVerticalCorridor(catchCenter, catchEnd, mergeRow);
+        const tryCorridorStart = Math.max(row, tryEnd - 1);
+        const catchCorridorStart = Math.max(row + 1, catchEnd - 1);
+        placeVerticalCorridor(tryCenter, tryCorridorStart, mergeRow);
+        placeVerticalCorridor(catchCenter, catchCorridorStart, mergeRow);
         placeHorizontalCorridor(mergeRow, tryCenter, catchCenter);
 
         // Store as a branch for game decisions
@@ -431,15 +441,96 @@ export function layoutCFG(cfgRoot) {
     }
   }
 
+  // Trim the grid to just the used area + 1 tile padding
+  const trimResult = trimGrid(paddedTiles, paddedTileData, gemPlacements, branches, entry, exit);
+
   return {
-    grid: paddedTiles,
-    tileData: paddedTileData,
-    entry,
-    exit,
+    grid: trimResult.grid,
+    tileData: trimResult.tileData,
+    entry: trimResult.entry,
+    exit: trimResult.exit,
+    branches: trimResult.branches,
+    gems: trimResult.gems,
+    width: trimResult.grid[0]?.length || 0,
+    height: trimResult.grid.length,
+  };
+}
+
+function trimGrid(tiles, tileData, gems, branches, entry, exit) {
+  // Find bounding box of non-empty tiles
+  let minRow = tiles.length, maxRow = 0;
+  let minCol = tiles[0]?.length || 0, maxCol = 0;
+
+  for (let r = 0; r < tiles.length; r++) {
+    for (let c = 0; c < tiles[r].length; c++) {
+      if (tiles[r][c] !== TILE_TYPES.EMPTY) {
+        minRow = Math.min(minRow, r);
+        maxRow = Math.max(maxRow, r);
+        minCol = Math.min(minCol, c);
+        maxCol = Math.max(maxCol, c);
+      }
+    }
+  }
+
+  // Add 1 tile padding around the bounding box
+  const padding = 1;
+  minRow = Math.max(0, minRow - padding);
+  maxRow = Math.min(tiles.length - 1, maxRow + padding);
+  minCol = Math.max(0, minCol - padding);
+  maxCol = Math.min((tiles[0]?.length || 1) - 1, maxCol + padding);
+
+  // Crop the grid
+  const croppedTiles = [];
+  const croppedTileData = [];
+  for (let r = minRow; r <= maxRow; r++) {
+    croppedTiles.push(tiles[r].slice(minCol, maxCol + 1));
+    croppedTileData.push(tileData[r].slice(minCol, maxCol + 1));
+  }
+
+  // Update positions by subtracting the offset
+  const offsetX = minCol;
+  const offsetY = minRow;
+
+  // Update gems
+  for (const gem of gems) {
+    gem.x -= offsetX;
+    gem.y -= offsetY;
+  }
+
+  // Update branches
+  for (const branch of branches) {
+    branch.x -= offsetX;
+    branch.y -= offsetY;
+    if (branch.truePath) {
+      branch.truePath.col -= offsetX;
+      branch.truePath.startRow -= offsetY;
+    }
+    if (branch.falsePath) {
+      branch.falsePath.col -= offsetX;
+      branch.falsePath.startRow -= offsetY;
+    }
+    if (branch.mergeRow !== undefined) branch.mergeRow -= offsetY;
+    if (branch.trueEndRow !== undefined) branch.trueEndRow -= offsetY;
+    if (branch.falseEndRow !== undefined) branch.falseEndRow -= offsetY;
+    if (branch.cases) {
+      for (const c of branch.cases) {
+        c.col -= offsetX;
+        c.startRow -= offsetY;
+      }
+    }
+  }
+
+  // Update entry and exit
+  const newEntry = { x: entry.x - offsetX, y: entry.y - offsetY };
+  const newExit = { x: exit.x - offsetX, y: exit.y - offsetY };
+
+  return {
+    grid: croppedTiles,
+    tileData: croppedTileData,
+    gems,
     branches,
-    gems: gemPlacements,
-    width: finalWidth,
-    height: finalHeight,
+    entry: newEntry,
+    exit: newExit,
   };
 }
 

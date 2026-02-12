@@ -624,38 +624,42 @@ export default class LevelScene {
   }
 
   _buildWalkPath(gemWaypoints) {
+    // Build path using coverage order - walk when possible, teleport when not
     const path = [];
     let curX = this.player.gridX;
     let curY = this.player.gridY;
 
-    console.log('[WalkPath] Building path from', curX, curY);
-    console.log('[WalkPath] Waypoints:', gemWaypoints);
+    console.log('%c[WalkPath] Building path from', 'color: #44aaff', curX, curY);
+    console.log('%c[WalkPath] Waypoints (coverage order):', 'color: #44aaff', gemWaypoints.map(w => `(${w.x},${w.y}) line:${w.line}`));
 
-    for (const wp of gemWaypoints) {
+    for (let i = 0; i < gemWaypoints.length; i++) {
+      const wp = gemWaypoints[i];
       if (wp.x === curX && wp.y === curY) {
-        console.log('[WalkPath] Already at waypoint', wp.x, wp.y);
+        console.log(`[WalkPath] #${i}: Already at (${wp.x},${wp.y})`);
         continue;
       }
 
       const segment = this._bfs(curX, curY, wp.x, wp.y);
       if (segment) {
-        console.log('[WalkPath] Found path from', curX, curY, 'to', wp.x, wp.y, '- length:', segment.length);
-        // Skip the first tile of each segment (it's the current position)
-        for (let i = 1; i < segment.length; i++) {
-          path.push(segment[i]);
+        console.log(`%c[WalkPath] #${i}: WALK from (${curX},${curY}) to (${wp.x},${wp.y}) - ${segment.length} steps`, 'color: #44ff44');
+        // Add walk steps (skip first tile - current position)
+        for (let j = 1; j < segment.length; j++) {
+          path.push({ ...segment[j], action: 'walk' });
         }
       } else {
-        // No path found - just jump directly to this waypoint
-        // This handles cases like break statements where layout might have gaps
-        console.warn('[WalkPath] NO PATH from', curX, curY, 'to', wp.x, wp.y, '- jumping directly');
-        path.push({ x: wp.x, y: wp.y });
+        // No walkable path - teleport (execution jumped to this statement)
+        console.log(`%c[WalkPath] #${i}: TELEPORT from (${curX},${curY}) to (${wp.x},${wp.y})`, 'color: #ff4444; font-weight: bold');
+        console.log(`  Source tile type: ${this.dungeonMap.getTileType(curX, curY)}, walkable: ${this.dungeonMap.isWalkable(curX, curY)}`);
+        console.log(`  Target tile type: ${this.dungeonMap.getTileType(wp.x, wp.y)}, walkable: ${this.dungeonMap.isWalkable(wp.x, wp.y)}`);
+        path.push({ x: wp.x, y: wp.y, action: 'teleport' });
       }
-      // Always update current position to this waypoint
       curX = wp.x;
       curY = wp.y;
     }
 
-    console.log('[WalkPath] Final path length:', path.length);
+    const walkCount = path.filter(p => p.action === 'walk').length;
+    const teleportCount = path.filter(p => p.action === 'teleport').length;
+    console.log(`%c[WalkPath] Final: ${path.length} steps (${walkCount} walk, ${teleportCount} teleport)`, 'color: #44aaff; font-weight: bold');
     return path;
   }
 
@@ -667,9 +671,11 @@ export default class LevelScene {
     const endWalkable = this.dungeonMap.isWalkable(ex, ey);
     if (!startWalkable || !endWalkable) {
       console.warn(`[BFS] Start (${sx},${sy}) walkable: ${startWalkable}, End (${ex},${ey}) walkable: ${endWalkable}`);
+      if (!startWalkable) {
+        console.warn(`[BFS] Start tile type: ${this.dungeonMap.getTileType(sx, sy)}`);
+      }
       if (!endWalkable) {
-        const tileType = this.dungeonMap.getTileType(ex, ey);
-        console.warn(`[BFS] End tile type: ${tileType}`);
+        console.warn(`[BFS] End tile type: ${this.dungeonMap.getTileType(ex, ey)}`);
       }
     }
 
@@ -705,8 +711,25 @@ export default class LevelScene {
       }
     }
 
-    // Path not found - log diagnostic info
+    // Path not found - detailed diagnostic
     console.warn(`[BFS] NO PATH from (${sx},${sy}) to (${ex},${ey}). Visited ${visited.size} tiles.`);
+
+    // Log the tiles around start and end to help debug
+    console.warn(`[BFS] Tiles around start (${sx},${sy}):`);
+    for (const [dx, dy, dir] of [[0,-1,'up'], [0,1,'down'], [-1,0,'left'], [1,0,'right']]) {
+      const nx = sx + dx, ny = sy + dy;
+      const type = this.dungeonMap.getTileType(nx, ny);
+      const walkable = this.dungeonMap.isWalkable(nx, ny);
+      console.warn(`  ${dir}: (${nx},${ny}) type=${type} walkable=${walkable}`);
+    }
+    console.warn(`[BFS] Tiles around end (${ex},${ey}):`);
+    for (const [dx, dy, dir] of [[0,-1,'up'], [0,1,'down'], [-1,0,'left'], [1,0,'right']]) {
+      const nx = ex + dx, ny = ey + dy;
+      const type = this.dungeonMap.getTileType(nx, ny);
+      const walkable = this.dungeonMap.isWalkable(nx, ny);
+      console.warn(`  ${dir}: (${nx},${ny}) type=${type} walkable=${walkable}`);
+    }
+
     return null;
   }
 
@@ -949,29 +972,38 @@ export default class LevelScene {
     console.log('Entry:', layout.entry);
     console.log('Exit:', layout.exit);
 
-    // Print ASCII grid
-    console.log('%cGrid:', 'color: #ffaa44; font-weight: bold;');
-    let gridStr = '';
+    // Print ASCII grid with column headers
+    console.log('%cGrid (. = empty, # = wall, F = floor, - = corridor_h, | = corridor_v, S = entry, E = exit, M = merge, ? = branch):', 'color: #ffaa44; font-weight: bold;');
+
+    // Column header
+    let header = '   ';
+    for (let x = 0; x < (layout.grid[0]?.length || 0); x++) {
+      header += (x % 10).toString();
+    }
+    console.log(header);
+
+    // Grid rows
     for (let y = 0; y < layout.grid.length; y++) {
       let row = y.toString().padStart(2) + ' ';
       for (let x = 0; x < layout.grid[y].length; x++) {
         const tile = layout.grid[y][x];
-        row += TILE_NAMES[tile] || '?';
+        // Check if there's a gem at this position
+        const hasGem = layout.gems.some(g => g.x === x && g.y === y);
+        if (hasGem) {
+          row += 'G'; // Show gems
+        } else {
+          row += TILE_NAMES[tile] || '?';
+        }
       }
-      gridStr += row + '\n';
-    }
-    console.log(gridStr);
-
-    // Print gem positions
-    console.log('%cGems:', 'color: #ffaa44; font-weight: bold;');
-    for (const gem of layout.gems) {
-      console.log(`  ${gem.id}: (${gem.x}, ${gem.y}) - line ${gem.loc?.start?.line || '?'}`);
+      console.log(row);
     }
 
-    // Print branch positions
-    console.log('%cBranches:', 'color: #ffaa44; font-weight: bold;');
-    for (const branch of layout.branches) {
-      console.log(`  ${branch.id}: (${branch.x}, ${branch.y}) - condition: ${branch.condition?.slice(0, 30) || '?'}`);
+    // Print gem positions with their line numbers
+    console.log('%cGems (sorted by line):', 'color: #ffaa44; font-weight: bold;');
+    const sortedGems = [...layout.gems].sort((a, b) => (a.loc?.start?.line || 0) - (b.loc?.start?.line || 0));
+    for (const gem of sortedGems) {
+      const tileType = layout.grid[gem.y]?.[gem.x];
+      console.log(`  ${gem.id}: (${gem.x}, ${gem.y}) line:${gem.loc?.start?.line || '?'} tile:${TILE_NAMES[tileType] || tileType}`);
     }
 
     console.log('%c=== END LAYOUT ===', 'color: #44aaff; font-weight: bold;');
