@@ -103,17 +103,18 @@ export default class SpriteManager {
     this.textures.catchEntry = this._makeCatchEntryTexture();
 
     // ============================================
-    // GEMS: Animated coins from tileset
+    // GEMS: Custom crystal sprites
     // ============================================
-    this.textures.gemFrame0 = this._extractTexture(289, 385, 6, 7);  // coin_anim_f0
-    this.textures.gemFrame1 = this._extractTexture(297, 385, 6, 7);  // coin_anim_f1
-    this.textures.gemFrame2 = this._extractTexture(305, 385, 6, 7);  // coin_anim_f2
-    this.textures.gemFrame3 = this._extractTexture(313, 385, 6, 7);  // coin_anim_f3
-
-    // Use flask sprites for gem display (larger, more visible)
-    this.textures.gem = this._extractTexture(304, 336, 16, 16);         // flask_big_blue
-    this.textures.gemCollected = this._extractTexture(320, 336, 16, 16); // flask_big_green
+    // Generate custom gem graphics that look like actual gems/crystals
+    this.textures.gem = this._makeGemTexture(0x44bbff, 0x2288dd);          // Blue crystal (uncollected)
+    this.textures.gemCollected = this._makeGemTexture(0x44ff66, 0x22bb44); // Green crystal (collected)
     this.textures.gemGhost = this._makeGhostGemTexture();
+
+    // Animation frames for gems (slight glow pulse)
+    this.textures.gemFrame0 = this._makeGemTexture(0x44bbff, 0x2288dd, 0.8);
+    this.textures.gemFrame1 = this._makeGemTexture(0x55ccff, 0x3399ee, 0.9);
+    this.textures.gemFrame2 = this._makeGemTexture(0x66ddff, 0x44aaff, 1.0);
+    this.textures.gemFrame3 = this._makeGemTexture(0x55ccff, 0x3399ee, 0.9);
 
     // ============================================
     // WEAPONS/RUNES: Keep generated for magic feel
@@ -171,16 +172,87 @@ export default class SpriteManager {
   // Generated textures for special game elements
   // ============================================
 
-  _makeGhostGemTexture() {
-    // Create a dimmed version of the flask
+  _makeGemTexture(color, shadowColor, glowIntensity = 1.0) {
     const g = new PIXI.Graphics();
     const s = 16;
-    g.beginFill(0x555577, 0.4);
-    g.drawRoundedRect(4, 2, 8, 12, 2);
+    const cx = s / 2, cy = s / 2;
+
+    // Outer glow
+    g.beginFill(color, 0.2 * glowIntensity);
+    g.drawCircle(cx, cy, 7);
     g.endFill();
-    g.beginFill(0x444466, 0.3);
-    g.drawRoundedRect(5, 3, 6, 4, 1);
+
+    // Crystal shape (hexagonal/diamond)
+    // Main body
+    g.beginFill(shadowColor);
+    g.moveTo(cx, cy - 6);      // top
+    g.lineTo(cx + 5, cy - 2);  // top-right
+    g.lineTo(cx + 5, cy + 3);  // bottom-right
+    g.lineTo(cx, cy + 6);      // bottom
+    g.lineTo(cx - 5, cy + 3);  // bottom-left
+    g.lineTo(cx - 5, cy - 2);  // top-left
+    g.closePath();
     g.endFill();
+
+    // Lighter left face
+    g.beginFill(color);
+    g.moveTo(cx, cy - 6);      // top
+    g.lineTo(cx, cy + 6);      // bottom
+    g.lineTo(cx - 5, cy + 3);  // bottom-left
+    g.lineTo(cx - 5, cy - 2);  // top-left
+    g.closePath();
+    g.endFill();
+
+    // Highlight on top-left
+    g.beginFill(0xffffff, 0.5);
+    g.moveTo(cx - 1, cy - 5);
+    g.lineTo(cx - 4, cy - 2);
+    g.lineTo(cx - 4, cy);
+    g.lineTo(cx - 1, cy - 2);
+    g.closePath();
+    g.endFill();
+
+    // Bright sparkle
+    g.beginFill(0xffffff, 0.8);
+    g.drawCircle(cx - 2, cy - 3, 1.5);
+    g.endFill();
+
+    // Small sparkle
+    g.beginFill(0xffffff, 0.6);
+    g.drawCircle(cx + 1, cy - 1, 0.8);
+    g.endFill();
+
+    return this._graphicsToTexture(g);
+  }
+
+  _makeGhostGemTexture() {
+    // Create a dimmed/ghostly version of the gem
+    const g = new PIXI.Graphics();
+    const s = 16;
+    const cx = s / 2, cy = s / 2;
+
+    // Faint outline
+    g.beginFill(0x555577, 0.3);
+    g.moveTo(cx, cy - 6);
+    g.lineTo(cx + 5, cy - 2);
+    g.lineTo(cx + 5, cy + 3);
+    g.lineTo(cx, cy + 6);
+    g.lineTo(cx - 5, cy + 3);
+    g.lineTo(cx - 5, cy - 2);
+    g.closePath();
+    g.endFill();
+
+    // Inner shape
+    g.beginFill(0x444466, 0.2);
+    g.moveTo(cx, cy - 4);
+    g.lineTo(cx + 3, cy - 1);
+    g.lineTo(cx + 3, cy + 2);
+    g.lineTo(cx, cy + 4);
+    g.lineTo(cx - 3, cy + 2);
+    g.lineTo(cx - 3, cy - 1);
+    g.closePath();
+    g.endFill();
+
     return this._graphicsToTexture(g);
   }
 
