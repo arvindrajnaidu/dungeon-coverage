@@ -116,9 +116,7 @@ export default class LevelScene {
     }
     const stmtCov = this.coverageTracker.getStatementCoverage();
     console.log('[LevelScene] Replayed', this.testRuns.length, 'tests. Coverage:', stmtCov.percent.toFixed(0) + '%');
-
-    // Highlight covered lines in code panel
-    this._highlightCoveredLines();
+    // Note: _highlightCoveredLines is called in _startRun after codePanel is created
   }
 
   // Highlight all covered lines in the code panel based on aggregated coverage
@@ -176,6 +174,9 @@ export default class LevelScene {
     this.codePanel.y = 0;
     this.codePanel.setSource(this.levelData.source, this.levelData.name);
     this.container.addChild(this.codePanel);
+
+    // Highlight any previously covered lines from saved tests
+    this._highlightCoveredLines();
 
     this.gameState.startNewRun();
     this.coveredGemPositions = new Set();
