@@ -79,18 +79,28 @@ export default class CodePanel extends PIXI.Container {
     // Update title
     this.titleText.text = levelName || 'Source Code';
 
-    // Parse lines
-    this.lines = source.trim().split('\n');
+    // Parse lines - don't trim to preserve line number alignment with coverage data
+    // Remove only trailing whitespace, keep leading newlines for line number accuracy
+    this.lines = source.trimEnd().split('\n');
+
+    // Skip empty leading lines in display but track offset for line numbers
+    this.lineOffset = 0;
+    while (this.lineOffset < this.lines.length && this.lines[this.lineOffset].trim() === '') {
+      this.lineOffset++;
+    }
+    // Slice to skip empty leading lines
+    this.displayLines = this.lines.slice(this.lineOffset);
 
     // Gutter background
     const gutterBg = new PIXI.Graphics();
     gutterBg.beginFill(0x0d1117);
-    gutterBg.drawRect(0, 0, this.gutterWidth, this.lines.length * this.lineHeight + 20);
+    gutterBg.drawRect(0, 0, this.gutterWidth, this.displayLines.length * this.lineHeight + 20);
     gutterBg.endFill();
     this.codeContainer.addChild(gutterBg);
 
-    // Create line containers
-    for (let i = 0; i < this.lines.length; i++) {
+    // Create line containers (using displayLines but showing correct line numbers)
+    for (let i = 0; i < this.displayLines.length; i++) {
+      const actualLineNumber = i + this.lineOffset + 1; // 1-indexed line number in original source
       const lineContainer = new PIXI.Container();
       lineContainer.y = i * this.lineHeight + this.padding;
 
@@ -112,27 +122,28 @@ export default class CodePanel extends PIXI.Container {
       currentMarker.name = 'currentMarker';
       lineContainer.addChild(currentMarker);
 
-      // Line number
-      const lineNum = new PIXI.Text(`${i + 1}`, {
+      // Line number (show actual line number from original source)
+      const lineNum = new PIXI.Text(`${actualLineNumber}`, {
         fontFamily: 'monospace',
         fontSize: 12,
         fill: 0x484f58,
       });
       lineNum.x = this.gutterWidth - lineNum.width - 8;
       lineNum.name = 'lineNum';
+      lineNum.lineNumber = actualLineNumber; // Store for later lookup
       lineContainer.addChild(lineNum);
 
       // Code text with syntax highlighting
-      const codeText = this._createHighlightedLine(this.lines[i]);
+      const codeText = this._createHighlightedLine(this.displayLines[i]);
       codeText.x = this.gutterWidth + 8;
       lineContainer.addChild(codeText);
 
       this.codeContainer.addChild(lineContainer);
-      this.lineContainers.push(lineContainer);
+      this.lineContainers.push({ container: lineContainer, lineNumber: actualLineNumber });
     }
 
     // Calculate max scroll
-    const contentHeight = this.lines.length * this.lineHeight + this.padding * 2;
+    const contentHeight = this.displayLines.length * this.lineHeight + this.padding * 2;
     this.maxScroll = Math.max(0, contentHeight - this.codeAreaHeight);
 
     // Enable scroll
@@ -233,12 +244,21 @@ export default class CodePanel extends PIXI.Container {
     return tokens;
   }
 
-  highlightLine(lineNumber, isCurrent = false) {
-    if (lineNumber < 1 || lineNumber > this.lineContainers.length) return;
+  // Find the container for a given line number
+  _findContainerByLine(lineNumber) {
+    for (const entry of this.lineContainers) {
+      if (entry.lineNumber === lineNumber) {
+        return entry;
+      }
+    }
+    return null;
+  }
 
-    const idx = lineNumber - 1;
-    const container = this.lineContainers[idx];
-    if (!container) return;
+  highlightLine(lineNumber, isCurrent = false) {
+    const entry = this._findContainerByLine(lineNumber);
+    if (!entry) return;
+
+    const container = entry.container;
 
     // Mark as highlighted (covered)
     this.highlightedLines.add(lineNumber);
@@ -265,20 +285,19 @@ export default class CodePanel extends PIXI.Container {
   _setCurrentLine(lineNumber) {
     // Clear previous current marker
     if (this.currentLine !== null && this.currentLine !== lineNumber) {
-      const prevIdx = this.currentLine - 1;
-      if (this.lineContainers[prevIdx]) {
-        const prevMarker = this.lineContainers[prevIdx].getChildByName('currentMarker');
+      const prevEntry = this._findContainerByLine(this.currentLine);
+      if (prevEntry) {
+        const prevMarker = prevEntry.container.getChildByName('currentMarker');
         if (prevMarker) prevMarker.visible = false;
       }
     }
 
     this.currentLine = lineNumber;
-    const idx = lineNumber - 1;
-    const container = this.lineContainers[idx];
-    if (!container) return;
+    const entry = this._findContainerByLine(lineNumber);
+    if (!entry) return;
 
     // Show current marker
-    const marker = container.getChildByName('currentMarker');
+    const marker = entry.container.getChildByName('currentMarker');
     if (marker) marker.visible = true;
 
     // Auto-scroll to keep current line visible
@@ -286,7 +305,11 @@ export default class CodePanel extends PIXI.Container {
   }
 
   _scrollToLine(lineNumber) {
-    const lineY = (lineNumber - 1) * this.lineHeight + this.padding;
+    // Find the index of this line in the display
+    const idx = this.lineContainers.findIndex(e => e.lineNumber === lineNumber);
+    if (idx < 0) return;
+
+    const lineY = idx * this.lineHeight + this.padding;
     const viewTop = this.scrollY;
     const viewBottom = this.scrollY + this.codeAreaHeight;
 
@@ -303,7 +326,8 @@ export default class CodePanel extends PIXI.Container {
     this.highlightedLines.clear();
     this.currentLine = null;
 
-    for (const container of this.lineContainers) {
+    for (const entry of this.lineContainers) {
+      const container = entry.container;
       const highlight = container.getChildByName('highlight');
       if (highlight) highlight.visible = false;
 
