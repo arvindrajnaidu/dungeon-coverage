@@ -1,4 +1,7 @@
-import { TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../constants.js';
+import { TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH } from '../constants.js';
+
+// Dungeon area width (viewport minus code panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
 
 export default class Camera {
   constructor(worldContainer, offsetX = 0, offsetY = 0) {
@@ -21,7 +24,8 @@ export default class Camera {
   }
 
   update() {
-    const desiredX = this.offsetX + VIEWPORT_WIDTH / 2 - this.targetX;
+    // Center within the dungeon area (right side of screen)
+    const desiredX = this.offsetX + DUNGEON_WIDTH / 2 - this.targetX;
     const desiredY = this.offsetY + VIEWPORT_HEIGHT / 2 - this.targetY;
 
     this.worldContainer.x += (desiredX - this.worldContainer.x) * this.smoothing;
@@ -31,7 +35,8 @@ export default class Camera {
   snapTo(gridX, gridY) {
     this.targetX = gridX * TILE_SIZE + TILE_SIZE / 2;
     this.targetY = gridY * TILE_SIZE + TILE_SIZE / 2;
-    this.worldContainer.x = this.offsetX + VIEWPORT_WIDTH / 2 - this.targetX;
+    // Center within the dungeon area (right side of screen)
+    this.worldContainer.x = this.offsetX + DUNGEON_WIDTH / 2 - this.targetX;
     this.worldContainer.y = this.offsetY + VIEWPORT_HEIGHT / 2 - this.targetY;
   }
 }
