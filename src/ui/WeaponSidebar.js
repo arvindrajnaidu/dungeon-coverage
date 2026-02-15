@@ -1,6 +1,9 @@
 import * as PIXI from 'pixi.js';
-import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, COLORS } from '../constants.js';
+import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, COLORS } from '../constants.js';
 import SpriteManager from '../engine/SpriteManager.js';
+
+// Dungeon area width (viewport minus code panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
 
 const SIDEBAR_W = 140;
 const ITEM_H = 36;
@@ -20,8 +23,8 @@ export default class WeaponSidebar extends PIXI.Container {
   }
 
   _layout() {
-    // Position sidebar on the right side
-    this.x = VIEWPORT_WIDTH - SIDEBAR_W - 10;
+    // Position sidebar on the right side of dungeon area
+    this.x = DUNGEON_WIDTH - SIDEBAR_W - 10;
     this.y = 54; // Below HUD
   }
 

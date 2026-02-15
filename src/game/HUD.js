@@ -1,7 +1,10 @@
 import * as PIXI from 'pixi.js';
-import { COLORS, VIEWPORT_WIDTH, PHASES } from '../constants.js';
+import { COLORS, VIEWPORT_WIDTH, CODE_PANEL_WIDTH, PHASES } from '../constants.js';
 import ProgressBar from '../ui/ProgressBar.js';
 import Button from '../ui/Button.js';
+
+// Dungeon area width (viewport minus code panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
 
 export default class HUD {
   constructor(soundManager = null) {
@@ -12,10 +15,10 @@ export default class HUD {
     this.onForgeButton = null;
     this.onResetButton = null;
 
-    // Background bar
+    // Background bar (spans dungeon area only)
     const bg = new PIXI.Graphics();
     bg.beginFill(COLORS.HUD_BG, 0.85);
-    bg.drawRect(0, 0, VIEWPORT_WIDTH, 44);
+    bg.drawRect(0, 0, DUNGEON_WIDTH, 44);
     bg.endFill();
     this.container.addChild(bg);
 
@@ -77,8 +80,8 @@ export default class HUD {
     this.container.addChild(this.resetBtn);
 
     // Coverage progress bar
-    this.coverageBar = new ProgressBar(320, 14);
-    this.coverageBar.x = VIEWPORT_WIDTH - 440;
+    this.coverageBar = new ProgressBar(280, 14);
+    this.coverageBar.x = DUNGEON_WIDTH - 400;
     this.coverageBar.y = 6;
     this.container.addChild(this.coverageBar);
 
@@ -88,7 +91,7 @@ export default class HUD {
       fontSize: 10,
       fill: 0xaaaacc,
     });
-    this.coverageLabel.x = VIEWPORT_WIDTH - 440;
+    this.coverageLabel.x = DUNGEON_WIDTH - 400;
     this.coverageLabel.y = 26;
     this.container.addChild(this.coverageLabel);
 
@@ -98,7 +101,7 @@ export default class HUD {
       fontSize: 11,
       fill: 0x44aaff,
     });
-    this.gemsText.x = VIEWPORT_WIDTH - 130;
+    this.gemsText.x = DUNGEON_WIDTH - 130;
     this.gemsText.y = 26;
     this.container.addChild(this.gemsText);
 
@@ -108,7 +111,7 @@ export default class HUD {
 
   _createMuteButton() {
     this.muteBtn = new PIXI.Container();
-    this.muteBtn.x = VIEWPORT_WIDTH - 36;
+    this.muteBtn.x = DUNGEON_WIDTH - 36;
     this.muteBtn.y = 8;
     this.muteBtn.eventMode = 'static';
     this.muteBtn.cursor = 'pointer';
