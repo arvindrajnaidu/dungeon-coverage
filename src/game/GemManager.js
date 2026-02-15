@@ -1,6 +1,9 @@
 import * as PIXI from 'pixi.js';
 import { TILE_SIZE } from '../constants.js';
 
+// Gem scale factor (60% of tile size)
+const GEM_SCALE = (TILE_SIZE / 16) * 0.6;
+
 export default class GemManager {
   constructor(spriteManager, soundManager = null) {
     this.spriteManager = spriteManager;
@@ -21,8 +24,7 @@ export default class GemManager {
       sprite.anchor.set(0.5, 0.5);
       sprite.x = gem.x * TILE_SIZE + TILE_SIZE / 2;
       sprite.y = gem.y * TILE_SIZE + TILE_SIZE / 2;
-      const scale = TILE_SIZE / 16;
-      sprite.scale.set(scale, scale);
+      sprite.scale.set(GEM_SCALE, GEM_SCALE);
 
       this.container.addChild(sprite);
       this.gems.set(gem.id, {
@@ -74,16 +76,15 @@ export default class GemManager {
   _playCollectAnimation(gem) {
     let frame = 0;
     const totalFrames = 20;
-    const baseScale = 2; // Our base scale is 2x
     const ticker = new PIXI.Ticker();
     ticker.add(() => {
       frame++;
       gem.sprite.y = gem.baseY - Math.sin((frame / totalFrames) * Math.PI) * 10;
-      const scaleBoost = Math.sin((frame / totalFrames) * Math.PI) * 0.5;
-      gem.sprite.scale.set(baseScale + scaleBoost, baseScale + scaleBoost);
+      const scaleBoost = Math.sin((frame / totalFrames) * Math.PI) * 0.3;
+      gem.sprite.scale.set(GEM_SCALE + scaleBoost, GEM_SCALE + scaleBoost);
       if (frame >= totalFrames) {
         gem.sprite.y = gem.baseY;
-        gem.sprite.scale.set(baseScale, baseScale);
+        gem.sprite.scale.set(GEM_SCALE, GEM_SCALE);
         ticker.destroy();
       }
     });
