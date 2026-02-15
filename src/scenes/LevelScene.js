@@ -160,10 +160,10 @@ export default class LevelScene {
     bg.endFill();
     this.container.addChildAt(bg, 0);
 
-    // Calculate offset to center the game content
-    // The dungeon area starts after the code panel
-    this.offsetX = Math.max(0, (screenW - VIEWPORT_WIDTH) / 2);
-    this.dungeonOffsetX = this.offsetX + CODE_PANEL_WIDTH;
+    // Layout: code panel on left, dungeon on right
+    // No centering - start from left edge
+    this.offsetX = 0;
+    this.dungeonOffsetX = CODE_PANEL_WIDTH;
     this.offsetY = 0;
 
     // Create code panel on the left side
@@ -172,7 +172,7 @@ export default class LevelScene {
       this.codePanel.destroy({ children: true });
     }
     this.codePanel = new CodePanel(CODE_PANEL_WIDTH, screenH);
-    this.codePanel.x = this.offsetX;
+    this.codePanel.x = 0;
     this.codePanel.y = 0;
     this.codePanel.setSource(this.levelData.source, this.levelData.name);
     this.container.addChild(this.codePanel);
