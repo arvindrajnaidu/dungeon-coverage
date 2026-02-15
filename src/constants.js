@@ -4,6 +4,10 @@ export const GRID_ROWS = 25;
 export const VIEWPORT_WIDTH = 1400;
 export const VIEWPORT_HEIGHT = 800;
 
+// Split screen layout
+export const CODE_PANEL_WIDTH = 380;
+export const DUNGEON_AREA_X = CODE_PANEL_WIDTH;
+
 export const COLORS = {
   // Dungeon tiles - richer, more atmospheric colors
   FLOOR: 0x4a4a5e,

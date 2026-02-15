@@ -1,7 +1,11 @@
 import * as PIXI from 'pixi.js';
-import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../constants.js';
+import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH } from '../constants.js';
 import Panel from './Panel.js';
 import Button from './Button.js';
+
+// Dungeon area dimensions (excluding code panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+const DUNGEON_HEIGHT = VIEWPORT_HEIGHT;
 
 export default class TestModal {
   constructor() {
@@ -10,10 +14,10 @@ export default class TestModal {
     this.scrollY = 0;
     this.maxScroll = 0;
 
-    // Dimming overlay
+    // Dimming overlay (covers dungeon area only)
     this.overlay = new PIXI.Graphics();
     this.overlay.beginFill(0x000000, 0.7);
-    this.overlay.drawRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    this.overlay.drawRect(0, 0, DUNGEON_WIDTH, DUNGEON_HEIGHT);
     this.overlay.endFill();
     this.overlay.eventMode = 'static';
     this.overlay.on('pointertap', () => this.hide());
@@ -42,10 +46,10 @@ export default class TestModal {
       this.panel.destroy({ children: true });
     }
 
-    const panelW = 900;
+    const panelW = Math.min(900, DUNGEON_WIDTH - 40);
     const panelH = 650;
     this.panel = new Panel(panelW, panelH);
-    this.panel.centerOn(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    this.panel.centerOn(DUNGEON_WIDTH, DUNGEON_HEIGHT);
 
     // Title
     const title = new PIXI.Text(`TEST CASES - ${levelName || 'Level'}`, {

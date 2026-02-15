@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { PHASES, TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from '../constants.js';
+import { PHASES, TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, DUNGEON_AREA_X } from '../constants.js';
 import GameState from '../game/GameState.js';
 import Player from '../game/Player.js';
 import DungeonMap from '../game/DungeonMap.js';
@@ -12,6 +12,7 @@ import CoverageMapper from '../coverage/CoverageMapper.js';
 import Camera from '../engine/Camera.js';
 import CodeModal from '../ui/CodeModal.js';
 import TestModal from '../ui/TestModal.js';
+import CodePanel from '../ui/CodePanel.js';
 import WeaponSidebar from '../ui/WeaponSidebar.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
 import Button from '../ui/Button.js';
@@ -41,6 +42,7 @@ export default class LevelScene {
     this.hud = null;
     this.codeModal = null;
     this.testModal = null;
+    this.codePanel = null;
     this.camera = null;
 
     // Track test runs for the Test modal
@@ -114,6 +116,30 @@ export default class LevelScene {
     }
     const stmtCov = this.coverageTracker.getStatementCoverage();
     console.log('[LevelScene] Replayed', this.testRuns.length, 'tests. Coverage:', stmtCov.percent.toFixed(0) + '%');
+
+    // Highlight covered lines in code panel
+    this._highlightCoveredLines();
+  }
+
+  // Highlight all covered lines in the code panel based on aggregated coverage
+  _highlightCoveredLines() {
+    if (!this.codePanel) return;
+
+    const aggregated = this.coverageTracker.getAggregatedCoverage();
+    if (!aggregated) return;
+
+    // Get all covered statement lines
+    const statementMap = aggregated.statementMap;
+    const s = aggregated.s;
+
+    for (const stmtId of Object.keys(statementMap)) {
+      if (s[stmtId] > 0) {
+        const loc = statementMap[stmtId];
+        if (loc?.start?.line) {
+          this.codePanel.highlightLine(loc.start.line, false);
+        }
+      }
+    }
   }
 
   _startRun() {
@@ -135,8 +161,21 @@ export default class LevelScene {
     this.container.addChildAt(bg, 0);
 
     // Calculate offset to center the game content
+    // The dungeon area starts after the code panel
     this.offsetX = Math.max(0, (screenW - VIEWPORT_WIDTH) / 2);
+    this.dungeonOffsetX = this.offsetX + CODE_PANEL_WIDTH;
     this.offsetY = 0;
+
+    // Create code panel on the left side
+    if (this.codePanel) {
+      this.container.removeChild(this.codePanel);
+      this.codePanel.destroy({ children: true });
+    }
+    this.codePanel = new CodePanel(CODE_PANEL_WIDTH, screenH);
+    this.codePanel.x = this.offsetX;
+    this.codePanel.y = 0;
+    this.codePanel.setSource(this.levelData.source, this.levelData.name);
+    this.container.addChild(this.codePanel);
 
     this.gameState.startNewRun();
     this.coveredGemPositions = new Set();
@@ -172,12 +211,12 @@ export default class LevelScene {
     this.player.setPosition(this.currentLayout.entry.x, this.currentLayout.entry.y);
     this.worldContainer.addChild(this.player.getContainer());
 
-    // Camera - pass offset to center content on wider screens
-    this.camera = new Camera(this.worldContainer, this.offsetX, this.offsetY);
+    // Camera - pass offset to position dungeon to the right of code panel
+    this.camera = new Camera(this.worldContainer, this.dungeonOffsetX, this.offsetY);
     this.camera.snapTo(this.currentLayout.entry.x, this.currentLayout.entry.y);
 
-    // Position UI container with offset
-    this.uiContainer.x = this.offsetX;
+    // Position UI container with offset (after code panel)
+    this.uiContainer.x = this.dungeonOffsetX;
     this.uiContainer.y = this.offsetY;
 
     // HUD
@@ -264,11 +303,12 @@ export default class LevelScene {
       this._showNoWeaponsPrompt();
     }
 
-    // Enable stage-level pointer events for drag (cover full screen)
+    // Enable stage-level pointer events for drag (cover the dungeon area, not code panel)
     const gameApp = this.sceneManager.gameApp;
     const screenW = gameApp.getScreenWidth();
     const screenH = gameApp.getScreenHeight();
     this.container.eventMode = 'static';
+    // Hit area covers the full screen for drag tracking
     this.container.hitArea = new PIXI.Rectangle(0, 0, screenW, screenH);
     this.container.on('pointermove', this._onPointerMove);
     this.container.on('pointerup', this._onPointerUp);
@@ -278,10 +318,14 @@ export default class LevelScene {
   _showNoWeaponsPrompt() {
     this.noWeaponsOverlay = new PIXI.Container();
 
+    // Calculate dungeon area dimensions (excluding code panel)
+    const dungeonW = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+    const dungeonH = VIEWPORT_HEIGHT;
+
     // Semi-transparent background
     const bg = new PIXI.Graphics();
     bg.beginFill(0x000000, 0.7);
-    bg.drawRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    bg.drawRect(0, 0, dungeonW, dungeonH);
     bg.endFill();
     bg.eventMode = 'static';
     this.noWeaponsOverlay.addChild(bg);
@@ -292,7 +336,7 @@ export default class LevelScene {
     const panel = new PIXI.Graphics();
     panel.beginFill(0x1a1a3e);
     panel.lineStyle(2, 0xffaa44);
-    panel.drawRoundedRect((VIEWPORT_WIDTH - panelW) / 2, (VIEWPORT_HEIGHT - panelH) / 2, panelW, panelH, 10);
+    panel.drawRoundedRect((dungeonW - panelW) / 2, (dungeonH - panelH) / 2, panelW, panelH, 10);
     panel.endFill();
     this.noWeaponsOverlay.addChild(panel);
 
@@ -304,8 +348,8 @@ export default class LevelScene {
       fill: 0xffaa44,
     });
     title.anchor.set(0.5);
-    title.x = VIEWPORT_WIDTH / 2;
-    title.y = VIEWPORT_HEIGHT / 2 - 55;
+    title.x = dungeonW / 2;
+    title.y = dungeonH / 2 - 55;
     this.noWeaponsOverlay.addChild(title);
 
     // Description
@@ -316,23 +360,25 @@ export default class LevelScene {
       align: 'center',
     });
     desc.anchor.set(0.5);
-    desc.x = VIEWPORT_WIDTH / 2;
-    desc.y = VIEWPORT_HEIGHT / 2;
+    desc.x = dungeonW / 2;
+    desc.y = dungeonH / 2;
     this.noWeaponsOverlay.addChild(desc);
 
     // Go to Forge button
     const forgeBtn = new Button('Go to Forge', 140, 38, this.soundManager);
-    forgeBtn.x = VIEWPORT_WIDTH / 2 - 150;
-    forgeBtn.y = VIEWPORT_HEIGHT / 2 + 50;
+    forgeBtn.x = dungeonW / 2 - 150;
+    forgeBtn.y = dungeonH / 2 + 50;
     forgeBtn.onClick(() => {
       this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
     });
     this.noWeaponsOverlay.addChild(forgeBtn);
 
     // Back to Menu button
+    const dungeonW2 = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+    const dungeonH2 = VIEWPORT_HEIGHT;
     const backBtn = new Button('Back to Menu', 140, 38, this.soundManager);
-    backBtn.x = VIEWPORT_WIDTH / 2 + 10;
-    backBtn.y = VIEWPORT_HEIGHT / 2 + 50;
+    backBtn.x = dungeonW2 / 2 + 10;
+    backBtn.y = dungeonH2 / 2 + 50;
     backBtn.onClick(() => {
       this.sceneManager.switchTo('title');
     });
@@ -354,13 +400,17 @@ export default class LevelScene {
       this.soundManager.play('error');
     }
 
+    // Calculate dungeon area dimensions (excluding code panel)
+    const dungeonW = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+    const dungeonH = VIEWPORT_HEIGHT;
+
     // Create error overlay
     const overlay = new PIXI.Container();
 
     // Semi-transparent background
     const bg = new PIXI.Graphics();
     bg.beginFill(0x000000, 0.8);
-    bg.drawRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    bg.drawRect(0, 0, dungeonW, dungeonH);
     bg.endFill();
     bg.eventMode = 'static';
     overlay.addChild(bg);
@@ -371,20 +421,20 @@ export default class LevelScene {
     const panel = new PIXI.Graphics();
     panel.beginFill(0x2a1a1a);
     panel.lineStyle(3, 0xff4444);
-    panel.drawRoundedRect((VIEWPORT_WIDTH - panelW) / 2, (VIEWPORT_HEIGHT - panelH) / 2, panelW, panelH, 10);
+    panel.drawRoundedRect((dungeonW - panelW) / 2, (dungeonH - panelH) / 2, panelW, panelH, 10);
     panel.endFill();
     overlay.addChild(panel);
 
     // Error icon/title
-    const title = new PIXI.Text('⚠ Execution Error', {
+    const title = new PIXI.Text('Execution Error', {
       fontFamily: 'monospace',
       fontSize: 20,
       fontWeight: 'bold',
       fill: 0xff4444,
     });
     title.anchor.set(0.5);
-    title.x = VIEWPORT_WIDTH / 2;
-    title.y = VIEWPORT_HEIGHT / 2 - 70;
+    title.x = dungeonW / 2;
+    title.y = dungeonH / 2 - 70;
     overlay.addChild(title);
 
     // Error message
@@ -398,8 +448,8 @@ export default class LevelScene {
       align: 'center',
     });
     msgText.anchor.set(0.5);
-    msgText.x = VIEWPORT_WIDTH / 2;
-    msgText.y = VIEWPORT_HEIGHT / 2 - 20;
+    msgText.x = dungeonW / 2;
+    msgText.y = dungeonH / 2 - 20;
     overlay.addChild(msgText);
 
     // Hint
@@ -409,8 +459,8 @@ export default class LevelScene {
       fill: 0x888899,
     });
     hint.anchor.set(0.5);
-    hint.x = VIEWPORT_WIDTH / 2;
-    hint.y = VIEWPORT_HEIGHT / 2 + 30;
+    hint.x = dungeonW / 2;
+    hint.y = dungeonH / 2 + 30;
     overlay.addChild(hint);
 
     // OK button
@@ -419,7 +469,7 @@ export default class LevelScene {
     const btn = new PIXI.Graphics();
     btn.beginFill(0x553333);
     btn.lineStyle(2, 0xff6666);
-    btn.drawRoundedRect((VIEWPORT_WIDTH - btnW) / 2, VIEWPORT_HEIGHT / 2 + 55, btnW, btnH, 6);
+    btn.drawRoundedRect((dungeonW - btnW) / 2, dungeonH / 2 + 55, btnW, btnH, 6);
     btn.endFill();
     btn.eventMode = 'static';
     btn.cursor = 'pointer';
@@ -432,8 +482,8 @@ export default class LevelScene {
       fill: 0xffffff,
     });
     btnLabel.anchor.set(0.5);
-    btnLabel.x = VIEWPORT_WIDTH / 2;
-    btnLabel.y = VIEWPORT_HEIGHT / 2 + 55 + btnH / 2;
+    btnLabel.x = dungeonW / 2;
+    btnLabel.y = dungeonH / 2 + 55 + btnH / 2;
     overlay.addChild(btnLabel);
 
     // Close on button click or background click
@@ -782,6 +832,12 @@ export default class LevelScene {
       if (gemId != null) {
         this.gemManager.collectGem(gemId);
         this.gameState.collectGem(gemId);
+
+        // Highlight the corresponding line in the code panel
+        const layoutGem = this.currentLayout.gems.find(g => g.id === gemId);
+        if (layoutGem?.loc?.start?.line && this.codePanel) {
+          this.codePanel.highlightLine(layoutGem.loc.start.line, true);
+        }
       }
     }
   }
@@ -803,13 +859,19 @@ export default class LevelScene {
     console.log('[MarkCovered] Aggregated coverage - covered gems:', [...coveredGemIds]);
     console.log('[MarkCovered] All gems in manager:', [...this.gemManager.gems.keys()]);
 
-    // Mark those gems as collected
+    // Mark those gems as collected and highlight lines
     for (const gemId of coveredGemIds) {
       const gem = this.gemManager.gems.get(gemId);
       if (gem && !gem.collected) {
         this.gemManager.collectGem(gemId);
         this.gameState.collectGem(gemId);
         console.log(`[MarkCovered] Collected gem ${gemId}`);
+
+        // Highlight the line in code panel
+        const layoutGem = this.currentLayout.gems.find(g => g.id === gemId);
+        if (layoutGem?.loc?.start?.line && this.codePanel) {
+          this.codePanel.highlightLine(layoutGem.loc.start.line, false);
+        }
       }
     }
 
@@ -1058,6 +1120,11 @@ export default class LevelScene {
     // Reset coverage tracker
     this.coverageTracker.reset();
 
+    // Clear code panel highlights
+    if (this.codePanel) {
+      this.codePanel.clearHighlights();
+    }
+
     // Play sound
     if (this.soundManager) {
       this.soundManager.play('sceneTransition');
@@ -1076,6 +1143,10 @@ export default class LevelScene {
   exit() {
     // Clean up
     this._hideWeaponUI();
+    if (this.codePanel) {
+      this.codePanel.destroy({ children: true });
+      this.codePanel = null;
+    }
   }
 
   getContainer() {
