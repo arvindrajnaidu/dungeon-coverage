@@ -188,6 +188,7 @@ export default class LevelScene {
     this.offsetX = 0;
     this.dungeonOffsetX = CODE_PANEL_WIDTH;
     this.offsetY = 0;
+    this.cameraOffsetY = 0; // Keep player centered vertically
 
     // Create code panel on the left side
     if (this.codePanel) {
@@ -241,7 +242,7 @@ export default class LevelScene {
     this.worldContainer.addChild(this.player.getContainer());
 
     // Camera - pass offset to position dungeon to the right of code panel
-    this.camera = new Camera(this.worldContainer, this.dungeonOffsetX, this.offsetY);
+    this.camera = new Camera(this.worldContainer, this.dungeonOffsetX, this.cameraOffsetY);
     this.camera.snapTo(this.currentLayout.entry.x, this.currentLayout.entry.y);
 
     // Position UI container with offset (after code panel)

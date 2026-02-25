@@ -5,6 +5,7 @@ import Button from '../ui/Button.js';
 
 // Dungeon area width (viewport minus code panel and inventory panel)
 const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
+const HUD_HEIGHT = 38;
 
 export default class HUD {
   constructor(soundManager = null) {
@@ -15,104 +16,98 @@ export default class HUD {
     this.onCrystalForgeButton = null;
     this.onResetButton = null;
 
-    // Background bar (spans dungeon area only)
+    // Background bar (spans dungeon area only) - more compact
     const bg = new PIXI.Graphics();
     bg.beginFill(COLORS.HUD_BG, 0.85);
-    bg.drawRect(0, 0, DUNGEON_WIDTH, 44);
+    bg.drawRect(0, 0, DUNGEON_WIDTH, HUD_HEIGHT);
     bg.endFill();
     this.container.addChild(bg);
 
-    // Level text
+    // Level text and run counter on same line
     this.levelText = new PIXI.Text('Level 1', {
       fontFamily: 'monospace',
-      fontSize: 14,
+      fontSize: 12,
       fontWeight: 'bold',
       fill: COLORS.HUD_TEXT,
     });
-    this.levelText.x = 12;
-    this.levelText.y = 4;
+    this.levelText.x = 8;
+    this.levelText.y = 8;
     this.container.addChild(this.levelText);
 
-    // Run counter
     this.runText = new PIXI.Text('Run #1', {
       fontFamily: 'monospace',
-      fontSize: 11,
-      fill: 0xaaaacc,
+      fontSize: 10,
+      fill: 0x888899,
     });
-    this.runText.x = 12;
-    this.runText.y = 24;
+    this.runText.x = 75;
+    this.runText.y = 10;
     this.container.addChild(this.runText);
 
-    // Reset Tests button
+    // Buttons - original sizes
     this.resetBtn = new Button('Reset', 60, 28);
-    this.resetBtn.x = 110;
-    this.resetBtn.y = 8;
+    this.resetBtn.x = 140;
+    this.resetBtn.y = 2;
     this.resetBtn.onClick(() => {
       if (this.onResetButton) this.onResetButton();
     });
     this.container.addChild(this.resetBtn);
 
-    // View Test button
     this.testBtn = new Button('Tests', 60, 28);
-    this.testBtn.x = 180;
-    this.testBtn.y = 8;
+    this.testBtn.x = 210;
+    this.testBtn.y = 2;
     this.testBtn.onClick(() => {
       if (this.onTestButton) this.onTestButton();
     });
     this.container.addChild(this.testBtn);
 
-    // Forge button (wider - important action)
     this.forgeBtn = new Button('⚒ Forge', 100, 28);
-    this.forgeBtn.x = 250;
-    this.forgeBtn.y = 8;
+    this.forgeBtn.x = 280;
+    this.forgeBtn.y = 2;
     this.forgeBtn.onClick(() => {
       if (this.onForgeButton) this.onForgeButton();
     });
     this.container.addChild(this.forgeBtn);
 
-    // Crystal Forge button
     this.crystalBtn = new Button('🔮 Crystals', 100, 28);
-    this.crystalBtn.x = 360;
-    this.crystalBtn.y = 8;
+    this.crystalBtn.x = 390;
+    this.crystalBtn.y = 2;
     this.crystalBtn.onClick(() => {
       if (this.onCrystalForgeButton) this.onCrystalForgeButton();
     });
     this.container.addChild(this.crystalBtn);
 
-    // Coverage progress bar
-    this.coverageBar = new ProgressBar(280, 14);
-    this.coverageBar.x = DUNGEON_WIDTH - 400;
-    this.coverageBar.y = 6;
+    // Coverage progress bar - in the HUD on the right side
+    this.coverageBar = new ProgressBar(200, 16);
+    this.coverageBar.x = DUNGEON_WIDTH - 320;
+    this.coverageBar.y = 3;
     this.container.addChild(this.coverageBar);
 
-    // Coverage label
-    this.coverageLabel = new PIXI.Text('Coverage:', {
+    this.coverageLabel = new PIXI.Text('Stmt: 0% | Branch: 0%', {
       fontFamily: 'monospace',
       fontSize: 10,
       fill: 0xaaaacc,
     });
-    this.coverageLabel.x = DUNGEON_WIDTH - 400;
-    this.coverageLabel.y = 26;
+    this.coverageLabel.x = DUNGEON_WIDTH - 320;
+    this.coverageLabel.y = 21;
     this.container.addChild(this.coverageLabel);
 
-    // Gems counter (positioned left of mute button)
     this.gemsText = new PIXI.Text('Gems: 0/0', {
       fontFamily: 'monospace',
-      fontSize: 11,
+      fontSize: 10,
       fill: 0x44aaff,
     });
-    this.gemsText.x = DUNGEON_WIDTH - 130;
-    this.gemsText.y = 26;
+    this.gemsText.x = DUNGEON_WIDTH - 120;
+    this.gemsText.y = 21;
     this.container.addChild(this.gemsText);
 
-    // Mute toggle button
+    // Mute toggle button - top right
     this._createMuteButton();
   }
 
   _createMuteButton() {
     this.muteBtn = new PIXI.Container();
-    this.muteBtn.x = DUNGEON_WIDTH - 36;
-    this.muteBtn.y = 8;
+    this.muteBtn.x = DUNGEON_WIDTH - 32;
+    this.muteBtn.y = 3;
     this.muteBtn.eventMode = 'static';
     this.muteBtn.cursor = 'pointer';
 
