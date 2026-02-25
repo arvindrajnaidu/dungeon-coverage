@@ -72,10 +72,13 @@ export default class CoverageRunner {
     // Clear previous coverage
     window.__coverage__ = {};
 
+    // Track stubs instance for later dumping
+    let stubsInstance = null;
+
     const parseFnStr = getParseFnStr();
     if (!istanbul || !parseFnStr) {
       console.warn('Istanbul or maineffect not available');
-      return { result: null, coverageData: null, error: new Error('Dependencies not loaded') };
+      return { result: null, coverageData: null, error: new Error('Dependencies not loaded'), stubDump: null };
     }
 
     // Log what we're about to execute (unless quiet mode)
@@ -105,7 +108,6 @@ export default class CoverageRunner {
 
       // Create maineffect Stubs instance if we have stub parameters
       const StubsFactory = getStubs();
-      let stubsInstance = null;
       if (StubsFactory) {
         stubsInstance = StubsFactory(createMockFn);
         if (!quiet) console.log('%cUsing maineffect Stubs:', 'color: #66ffcc;', !!stubsInstance);
@@ -203,6 +205,11 @@ export default class CoverageRunner {
             }
           }
 
+          // Capture stub states via dump method (even on errors)
+          const getStubDump = () => stubsInstance && typeof stubsInstance.dump === 'function'
+            ? stubsInstance.dump()
+            : null;
+
           // Check if maineffect returned an Error instance
           if (result instanceof Error) {
             if (!quiet) {
@@ -210,7 +217,7 @@ export default class CoverageRunner {
               console.error('%cError:', 'color: #ff4444; font-weight: bold;', result);
               console.log('%c=== END TEST (with error) ===', 'color: #ff4444; font-weight: bold;');
             }
-            return { result: null, coverageData, error: result };
+            return { result: null, coverageData, error: result, stubDump: getStubDump() };
           }
 
           // Check if result has an error property (maineffect might wrap errors)
@@ -220,7 +227,7 @@ export default class CoverageRunner {
               console.error('%cError:', 'color: #ff4444; font-weight: bold;', result.error);
               console.log('%c=== END TEST (with error) ===', 'color: #ff4444; font-weight: bold;');
             }
-            return { result: null, coverageData, error: result.error };
+            return { result: null, coverageData, error: result.error, stubDump: getStubDump() };
           }
 
           // Check if result is an Error-like object (has message and stack properties)
@@ -232,7 +239,7 @@ export default class CoverageRunner {
             }
             const err = new Error(result.message);
             err.stack = result.stack;
-            return { result: null, coverageData, error: err };
+            return { result: null, coverageData, error: err, stubDump: getStubDump() };
           }
 
           // Check if result has an exception property (maineffect's getFn pattern)
@@ -242,7 +249,7 @@ export default class CoverageRunner {
               console.error('%cException:', 'color: #ff4444; font-weight: bold;', result.exception);
               console.log('%c=== END TEST (with error) ===', 'color: #ff4444; font-weight: bold;');
             }
-            return { result: null, coverageData, error: result.exception };
+            return { result: null, coverageData, error: result.exception, stubDump: getStubDump() };
           }
 
           // Check if result has a __error property (another possible pattern)
@@ -252,18 +259,29 @@ export default class CoverageRunner {
               console.error('%cError:', 'color: #ff4444; font-weight: bold;', result.__error);
               console.log('%c=== END TEST (with error) ===', 'color: #ff4444; font-weight: bold;');
             }
-            return { result: null, coverageData, error: result.__error };
+            return { result: null, coverageData, error: result.__error, stubDump: getStubDump() };
           }
+
+          // Capture stub states via dump method
+          const stubDump = stubsInstance && typeof stubsInstance.dump === 'function'
+            ? stubsInstance.dump()
+            : null;
 
           if (!quiet) {
             console.log('%c--- Function completed ---', 'color: #44ff44;');
             console.log('%cResult:', 'color: #44ff44; font-weight: bold;', result);
+            if (stubDump) {
+              console.log('%cStub states:', 'color: #66ffcc; font-weight: bold;', stubDump);
+            }
             console.log('%c=== END TEST ===', 'color: #44ff44; font-weight: bold;');
           }
 
-          return { result, coverageData, error: null };
+          return { result, coverageData, error: null, stubDump };
         } catch (e) {
           const coverageData = this._extractCoverage();
+          const stubDump = stubsInstance && typeof stubsInstance.dump === 'function'
+            ? stubsInstance.dump()
+            : null;
 
           if (!quiet) {
             console.log('%c--- Function threw error ---', 'color: #ff4444;');
@@ -273,18 +291,18 @@ export default class CoverageRunner {
             console.log('%c=== END TEST (with error) ===', 'color: #ff4444; font-weight: bold;');
           }
 
-          return { result: null, coverageData, error: e };
+          return { result: null, coverageData, error: e, stubDump };
         }
       } else {
         const coverageData = this._extractCoverage();
         if (!quiet) console.log('%c=== END TEST ===', 'color: #44ff44; font-weight: bold;');
-        return { result: null, coverageData, error: null };
+        return { result: null, coverageData, error: null, stubDump: null };
       }
     } catch (e) {
       console.error('%c=== EXECUTION FAILED ===', 'color: #ff4444; font-weight: bold; font-size: 14px;');
       console.error('%cError during setup:', 'color: #ff4444; font-weight: bold;', e);
       console.error('%cStack:', 'color: #ff4444;', e.stack);
-      return { result: null, coverageData: null, error: e };
+      return { result: null, coverageData: null, error: e, stubDump: null };
     }
   }
 

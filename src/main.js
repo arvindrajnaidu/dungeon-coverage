@@ -40,7 +40,7 @@ async function init() {
 
     // Register scenes
     const titleScene = new TitleScene(sceneManager, soundManager, progressManager, weaponInventory, crystalInventory);
-    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, crystalInventory, soundManager, progressManager);
+    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, soundManager, progressManager);
     const resultScene = new ResultScene(sceneManager, soundManager, progressManager);
     const victoryScene = new VictoryScene(sceneManager, soundManager);
     const forgeScene = new ForgeScene(sceneManager, weaponInventory, soundManager);

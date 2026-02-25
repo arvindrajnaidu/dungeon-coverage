@@ -24,17 +24,21 @@ export default class InventoryPanel extends PIXI.Container {
     this.crystalScrollY = 0;
     this.crystalMaxScroll = 0;
 
-    // Calculate section heights (split full height in half)
-    this.sectionHeight = Math.floor(this.panelHeight / 2);
+    // Calculate section heights (full height for weapons only if no crystals, else split)
+    this.hascrystals = crystalInventory !== null;
+    this.sectionHeight = this.hascrystals ? Math.floor(this.panelHeight / 2) : this.panelHeight;
 
     // Containers
     this.panelBg = new PIXI.Graphics();
     this.addChild(this.panelBg);
 
     this.weaponSection = new PIXI.Container();
-    this.crystalSection = new PIXI.Container();
     this.addChild(this.weaponSection);
-    this.addChild(this.crystalSection);
+
+    if (this.hascrystals) {
+      this.crystalSection = new PIXI.Container();
+      this.addChild(this.crystalSection);
+    }
 
     // Bind scroll handler
     this._onWheel = this._onWheel.bind(this);
@@ -48,10 +52,12 @@ export default class InventoryPanel extends PIXI.Container {
     this.panelBg.drawRect(0, 0, this.panelWidth, this.panelHeight);
     this.panelBg.endFill();
 
-    // Divider line between sections
-    this.panelBg.lineStyle(1, 0x333355);
-    this.panelBg.moveTo(0, this.sectionHeight);
-    this.panelBg.lineTo(this.panelWidth, this.sectionHeight);
+    // Divider line between sections (only if crystals enabled)
+    if (this.hascrystals) {
+      this.panelBg.lineStyle(1, 0x333355);
+      this.panelBg.moveTo(0, this.sectionHeight);
+      this.panelBg.lineTo(this.panelWidth, this.sectionHeight);
+    }
   }
 
   show() {
@@ -67,7 +73,9 @@ export default class InventoryPanel extends PIXI.Container {
 
   update() {
     this._renderWeapons();
-    this._renderCrystals();
+    if (this.hascrystals) {
+      this._renderCrystals();
+    }
   }
 
   _renderWeapons() {
@@ -146,6 +154,8 @@ export default class InventoryPanel extends PIXI.Container {
   }
 
   _renderCrystals() {
+    if (!this.hascrystals || !this.crystalSection) return;
+
     this.crystalSection.removeChildren();
     this.crystalSection.y = this.sectionHeight;
     this.crystalScrollY = 0;
@@ -369,7 +379,7 @@ export default class InventoryPanel extends PIXI.Container {
     const relativeY = mouseY - panelGlobalY;
     const listHeight = this.sectionHeight - SECTION_HEADER_H;
 
-    if (relativeY < this.sectionHeight && this.weaponMaxScroll > 0) {
+    if (this.weaponMaxScroll > 0 && (!this.hascrystals || relativeY < this.sectionHeight)) {
       // Scrolling weapons
       e.preventDefault();
       this.weaponScrollY = Math.min(this.weaponMaxScroll, Math.max(0, this.weaponScrollY + e.deltaY * 0.5));
@@ -381,7 +391,7 @@ export default class InventoryPanel extends PIXI.Container {
         this._drawScrollbar(this.weaponScrollbar, SECTION_HEADER_H, listHeight,
           this.weaponScrollY, this.weaponMaxScroll, contentHeight, 0x533483);
       }
-    } else if (relativeY >= this.sectionHeight && this.crystalMaxScroll > 0) {
+    } else if (this.hascrystals && relativeY >= this.sectionHeight && this.crystalMaxScroll > 0) {
       // Scrolling crystals
       e.preventDefault();
       this.crystalScrollY = Math.min(this.crystalMaxScroll, Math.max(0, this.crystalScrollY + e.deltaY * 0.5));

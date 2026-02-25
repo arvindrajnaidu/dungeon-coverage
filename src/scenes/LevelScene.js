@@ -14,18 +14,16 @@ import TestModal from '../ui/TestModal.js';
 import CodePanel from '../ui/CodePanel.js';
 import InventoryPanel from '../ui/InventoryPanel.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
-import CrystalSlot from '../ui/CrystalSlot.js';
 import RunResultModal from '../ui/RunResultModal.js';
 import Button from '../ui/Button.js';
 import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
 
 export default class LevelScene {
-  constructor(sceneManager, spriteManager, weaponInventory, crystalInventory, soundManager = null, progressManager = null) {
+  constructor(sceneManager, spriteManager, weaponInventory, soundManager = null, progressManager = null) {
     this.sceneManager = sceneManager;
     this.spriteManager = spriteManager;
     this.weaponInventory = weaponInventory;
-    this.crystalInventory = crystalInventory;
     this.soundManager = soundManager;
     this.progressManager = progressManager;
     this.container = new PIXI.Container();
@@ -50,16 +48,15 @@ export default class LevelScene {
     // Track test runs for the Test modal
     this.testRuns = [];
 
-    // Inventory panel and weapon/crystal slots
+    // Inventory panel and weapon slots
     this.inventoryPanel = null;
     this.weaponSlots = null;
-    this.crystalSlot = null;
 
-    // Execution result for crystal assertion
-    this.executionResult = null;
+    // Execution snapshot (result, error, stubDump)
+    this.executionSnapshot = null;
 
     // Drag state
-    this.dragState = null; // { type: 'weapon'|'crystal', id, sprite, active }
+    this.dragState = null; // { type: 'weapon', id, sprite, active }
 
     this.currentLayout = null;
     this.levelData = null;
@@ -271,11 +268,6 @@ export default class LevelScene {
         this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
       }
     };
-    this.hud.onCrystalForgeButton = () => {
-      if (this.gameState.phase === PHASES.SETUP) {
-        this.sceneManager.switchTo('crystalForge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
-      }
-    };
     this.hud.onResetButton = () => {
       this._resetTests();
     };
@@ -326,13 +318,11 @@ export default class LevelScene {
     // Check if player has weapons
     const hasWeapons = this.weaponInventory.getAll().length > 0;
 
-    const crystalSlotWidth = 160; // Match SLOT_W in CrystalSlot.js
-
-    // Create weapon slots centered above entry point (accounting for crystal slot width)
+    // Create weapon slots centered above entry point
     this.weaponSlots = new WeaponSlots(this.spriteManager, this.soundManager);
     const entryX = this.currentLayout.entry.x;
     const entryY = this.currentLayout.entry.y;
-    this.weaponSlots.setParams(paramHints, entryX, entryY, null, crystalSlotWidth);
+    this.weaponSlots.setParams(paramHints, entryX, entryY);
     this.weaponSlots.onRun(() => {
       if (this._canRun()) {
         const values = this.weaponSlots.getValues();
@@ -342,24 +332,13 @@ export default class LevelScene {
     });
     this.worldContainer.addChild(this.weaponSlots);
 
-    // Create crystal slot positioned on same line as weapon slots, to the right
-    this.crystalSlot = new CrystalSlot(this.soundManager);
-    this.crystalSlot.setSlotPosition(
-      this.weaponSlots.slotOffsetY,
-      this.weaponSlots.getEndX()
-    );
-    this.worldContainer.addChild(this.crystalSlot);
-
-    // Create inventory panel (right side - weapons on top, crystals on bottom)
+    // Create inventory panel (right side - weapons only)
     // Add to main container so it can be positioned at the right edge of the screen
-    this.inventoryPanel = new InventoryPanel(this.spriteManager, this.weaponInventory, this.crystalInventory, INVENTORY_PANEL_WIDTH, screenH);
+    this.inventoryPanel = new InventoryPanel(this.spriteManager, this.weaponInventory, null, INVENTORY_PANEL_WIDTH, screenH);
     this.inventoryPanel.x = screenW - INVENTORY_PANEL_WIDTH;
     this.inventoryPanel.y = 0;
     this.inventoryPanel.onWeaponDrag((weapon, e) => {
       this._startWeaponDrag(weapon, e);
-    });
-    this.inventoryPanel.onCrystalDrag((crystal, e) => {
-      this._startCrystalDrag(crystal, e);
     });
     this.inventoryPanel.show();
     this.container.addChild(this.inventoryPanel);
@@ -554,12 +533,8 @@ export default class LevelScene {
       // Return to setup phase
       this.gameState.setPhase(PHASES.SETUP);
       this.weaponSlots.reset();
-      if (this.crystalSlot) {
-        this.crystalSlot.reset();
-      }
       // Show the UI again
       if (this.weaponSlots) this.weaponSlots.visible = true;
-      if (this.crystalSlot) this.crystalSlot.visible = true;
       if (this.inventoryPanel) this.inventoryPanel.show();
       // Update run button visibility (should be hidden after reset)
       this._updateRunButtonVisibility();
@@ -578,9 +553,6 @@ export default class LevelScene {
     if (this.weaponSlots) {
       this.weaponSlots.visible = false;
     }
-    if (this.crystalSlot) {
-      this.crystalSlot.visible = false;
-    }
     this._cancelDrag();
     this.container.off('pointermove', this._onPointerMove);
     this.container.off('pointerup', this._onPointerUp);
@@ -588,9 +560,7 @@ export default class LevelScene {
   }
 
   _canRun() {
-    const weaponsFilled = this.weaponSlots && this.weaponSlots.allFilled();
-    const crystalFilled = this.crystalSlot && this.crystalSlot.hasCrystal();
-    return weaponsFilled && crystalFilled;
+    return this.weaponSlots && this.weaponSlots.allFilled();
   }
 
   _updateRunButtonVisibility() {
@@ -625,38 +595,6 @@ export default class LevelScene {
     };
   }
 
-  _startCrystalDrag(crystal, e) {
-    this._cancelDrag();
-
-    // Create a crystal drag sprite (text-based for now)
-    const sprite = new PIXI.Container();
-    const bg = new PIXI.Graphics();
-    bg.beginFill(crystal.color, 0.3);
-    bg.lineStyle(2, crystal.color);
-    bg.drawRoundedRect(-20, -16, 40, 32, 6);
-    bg.endFill();
-    sprite.addChild(bg);
-
-    const icon = new PIXI.Text('🔮', { fontFamily: 'sans-serif', fontSize: 20 });
-    icon.anchor.set(0.5);
-    sprite.addChild(icon);
-
-    sprite.alpha = 0.9;
-
-    const pos = e.data.getLocalPosition(this.container);
-    sprite.x = pos.x;
-    sprite.y = pos.y;
-
-    this.container.addChild(sprite);
-
-    this.dragState = {
-      type: 'crystal',
-      id: crystal.id,
-      sprite,
-      active: true,
-    };
-  }
-
   _onPointerMove(e) {
     if (!this.dragState || !this.dragState.active) return;
     const pos = e.data.getLocalPosition(this.container);
@@ -676,15 +614,6 @@ export default class LevelScene {
         const weapon = this.weaponInventory.get(this.dragState.id);
         if (weapon) {
           this.weaponSlots.dropWeapon(slotIdx, weapon);
-          this._updateRunButtonVisibility();
-        }
-      }
-    } else if (this.dragState.type === 'crystal') {
-      // Check if dropped on crystal slot
-      if (this.crystalSlot && this.crystalSlot.isOverSlot(pos.x, pos.y)) {
-        const crystal = this.crystalInventory.get(this.dragState.id);
-        if (crystal) {
-          this.crystalSlot.dropCrystal(crystal);
           this._updateRunButtonVisibility();
         }
       }
@@ -715,7 +644,7 @@ export default class LevelScene {
     }
 
     // Execute the function with user-provided values as stubs
-    const { coverageData, result, error } = await this.coverageRunner.execute(
+    const { coverageData, result, error, stubDump } = await this.coverageRunner.execute(
       this.levelData.source,
       this.levelData.fnName,
       values
@@ -734,12 +663,17 @@ export default class LevelScene {
     console.log('%c[LevelScene] Result type:', 'color: #44ff44;', typeof result);
     console.log('%c[LevelScene] Result value:', 'color: #44ff44;', result);
     console.log('%c[LevelScene] Coverage data:', 'color: #44ff44;', coverageData ? 'present' : 'null');
+    console.log('%c[LevelScene] Stub dump:', 'color: #66ffcc;', stubDump);
 
     // Store the current inputs for test tracking
     this._currentRunInputs = values;
 
-    // Store execution result for crystal assertion evaluation
-    this.executionResult = result;
+    // Store execution snapshot for the run result modal
+    this.executionSnapshot = {
+      result,
+      error: null,
+      stubDump,
+    };
 
     if (coverageData) {
       this.coverageData = coverageData;
@@ -1070,9 +1004,6 @@ export default class LevelScene {
     // Highlight all covered lines (including branch lines like 'else')
     this._highlightCoveredLines();
 
-    // Evaluate crystal assertion
-    this._evaluateCrystal();
-
     const isComplete = this.coverageTracker.isFullCoverage();
 
     // Save the test case (inputs only - coverage is computed by replaying tests)
@@ -1102,14 +1033,10 @@ export default class LevelScene {
     const dungeonWidth = screenW - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
     const dungeonHeight = screenH;
 
-    // Show run result modal
+    // Show run result modal with execution snapshot
     this.gameState.setPhase(PHASES.RESULTS);
     this.runResultModal.show({
-      assertionPassed: this._lastCrystalEvaluation?.passed ?? null,
-      assertionName: this._lastCrystalEvaluation?.crystalName || '',
-      actualValue: this._lastCrystalEvaluation?.actual,
-      expectedValue: this._lastCrystalEvaluation?.expected,
-      operator: this._lastCrystalEvaluation?.operator || '',
+      executionSnapshot: this.executionSnapshot,
       stmtCoverage: stmtCov.percent,
       branchCoverage: branchCov.percent,
       runNumber: this.gameState.runNumber,
@@ -1117,33 +1044,6 @@ export default class LevelScene {
       dungeonWidth,
       dungeonHeight,
     });
-  }
-
-  _evaluateCrystal() {
-    if (!this.crystalSlot || !this.crystalSlot.hasCrystal()) {
-      this._lastCrystalEvaluation = null;
-      return;
-    }
-
-    const crystal = this.crystalSlot.getCrystal();
-    const evaluationResult = this.crystalInventory.evaluate(crystal, this.executionResult);
-
-    console.log('%c[LevelScene] Crystal evaluation:', 'color: #aa88ff;', {
-      crystal: crystal.name,
-      expected: evaluationResult.expected,
-      actual: evaluationResult.actual,
-      operator: evaluationResult.operator,
-      passed: evaluationResult.pass,
-    });
-
-    // Store evaluation result for the modal
-    this._lastCrystalEvaluation = {
-      passed: evaluationResult.pass,
-      crystalName: crystal.name,
-      expected: evaluationResult.expected,
-      actual: evaluationResult.actual,
-      operator: evaluationResult.operator,
-    };
   }
 
   _returnToStart() {
@@ -1254,10 +1154,6 @@ export default class LevelScene {
         // Animate weapon slots glow effect
         if (this.weaponSlots) {
           this.weaponSlots.update(delta);
-        }
-        // Animate crystal slot glow effect
-        if (this.crystalSlot) {
-          this.crystalSlot.update(delta);
         }
         break;
       case PHASES.EXECUTING:

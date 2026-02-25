@@ -13,7 +13,6 @@ export default class HUD {
     this.soundManager = soundManager;
     this.onTestButton = null;
     this.onForgeButton = null;
-    this.onCrystalForgeButton = null;
     this.onResetButton = null;
 
     // Background bar (spans dungeon area only) - more compact
@@ -67,14 +66,6 @@ export default class HUD {
       if (this.onForgeButton) this.onForgeButton();
     });
     this.container.addChild(this.forgeBtn);
-
-    this.crystalBtn = new Button('🔮 Crystals', 100, 28);
-    this.crystalBtn.x = 390;
-    this.crystalBtn.y = 2;
-    this.crystalBtn.onClick(() => {
-      if (this.onCrystalForgeButton) this.onCrystalForgeButton();
-    });
-    this.container.addChild(this.crystalBtn);
 
     // Coverage progress bar - in the HUD on the right side
     this.coverageBar = new ProgressBar(200, 16);
@@ -178,9 +169,8 @@ export default class HUD {
     this.coverageLabel.text = `Stmt: ${Math.round(gameState.coveragePercent)}% | Branch: ${Math.round(gameState.branchCoveragePercent)}%`;
     this.gemsText.text = `Gems: ${gameState.collectedGems.size}/${gameState.totalGems}`;
 
-    // Show/hide Forge buttons based on phase
+    // Show/hide Forge button based on phase
     this.forgeBtn.visible = gameState.phase === PHASES.SETUP;
-    this.crystalBtn.visible = gameState.phase === PHASES.SETUP;
 
     // Sync mute button state
     if (this.soundManager) {

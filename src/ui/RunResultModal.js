@@ -14,11 +14,7 @@ export default class RunResultModal extends PIXI.Container {
 
   show(options = {}) {
     const {
-      assertionPassed = null,
-      assertionName = '',
-      actualValue = undefined,
-      expectedValue = undefined,
-      operator = '',
+      executionSnapshot = null,
       stmtCoverage = 0,
       branchCoverage = 0,
       runNumber = 1,
@@ -38,8 +34,10 @@ export default class RunResultModal extends PIXI.Container {
     overlay.eventMode = 'static'; // Block clicks
     this.addChild(overlay);
 
-    const panelW = 400;
-    const panelH = assertionPassed !== null ? 320 : 260;
+    // Calculate panel height based on snapshot content
+    const hasSnapshot = executionSnapshot !== null;
+    const panelW = 420;
+    const panelH = hasSnapshot ? 380 : 260;
     const panel = new Panel(panelW, panelH);
     panel.x = (dungeonWidth - panelW) / 2;
     panel.y = (dungeonHeight - panelH) / 2;
@@ -73,57 +71,63 @@ export default class RunResultModal extends PIXI.Container {
 
     let yOffset = 70;
 
-    // Assertion result (if crystal was used)
-    if (assertionPassed !== null) {
-      const assertionBg = new PIXI.Graphics();
-      if (assertionPassed) {
-        assertionBg.beginFill(0x1a3a1a, 0.9);
-        assertionBg.lineStyle(2, 0x44ff44);
-      } else {
-        assertionBg.beginFill(0x3a1a1a, 0.9);
-        assertionBg.lineStyle(2, 0xff4444);
-      }
-      assertionBg.drawRoundedRect(20, yOffset, panelW - 40, 70, 8);
-      assertionBg.endFill();
-      panel.addChild(assertionBg);
+    // Execution snapshot section
+    if (hasSnapshot) {
+      const snapshotBg = new PIXI.Graphics();
+      snapshotBg.beginFill(0x1a2a3a, 0.9);
+      snapshotBg.lineStyle(2, 0x4488cc);
+      snapshotBg.drawRoundedRect(20, yOffset, panelW - 40, 130, 8);
+      snapshotBg.endFill();
+      panel.addChild(snapshotBg);
 
-      // Assertion status
-      const statusText = assertionPassed ? '✓ ASSERTION PASSED' : '✗ ASSERTION FAILED';
-      const statusColor = assertionPassed ? 0x44ff44 : 0xff4444;
-
-      const assertionStatus = new PIXI.Text(statusText, {
+      // Snapshot title
+      const snapshotTitle = new PIXI.Text('📸 Execution Snapshot', {
         fontFamily: 'monospace',
-        fontSize: 16,
+        fontSize: 13,
         fontWeight: 'bold',
-        fill: statusColor,
+        fill: 0x66aaff,
       });
-      assertionStatus.anchor.set(0.5, 0);
-      assertionStatus.x = panelW / 2;
-      assertionStatus.y = yOffset + 12;
-      panel.addChild(assertionStatus);
+      snapshotTitle.x = 30;
+      snapshotTitle.y = yOffset + 8;
+      panel.addChild(snapshotTitle);
 
-      // Assertion details
-      let detailText = '';
-      if (assertionPassed) {
-        detailText = assertionName || 'Crystal assertion satisfied';
-      } else {
-        const actualStr = this._formatValue(actualValue);
-        const expectedStr = this._formatValue(expectedValue);
-        detailText = `Expected: ${operator} ${expectedStr}\nGot: ${actualStr}`;
+      // Build snapshot JSON preview
+      const snapshotData = {
+        result: executionSnapshot.result,
+        error: executionSnapshot.error ? String(executionSnapshot.error) : null,
+        stubs: executionSnapshot.stubDump || {},
+      };
+
+      // Format as compact JSON for display
+      let snapshotJson = JSON.stringify(snapshotData, null, 1);
+      // Truncate if too long
+      if (snapshotJson.length > 180) {
+        snapshotJson = snapshotJson.substring(0, 177) + '...';
       }
 
-      const assertionDetail = new PIXI.Text(detailText, {
+      const snapshotText = new PIXI.Text(snapshotJson, {
         fontFamily: 'monospace',
-        fontSize: 10,
-        fill: assertionPassed ? 0xaaffaa : 0xffaaaa,
-        align: 'center',
+        fontSize: 9,
+        fill: 0xaaccee,
+        wordWrap: true,
+        wordWrapWidth: panelW - 60,
       });
-      assertionDetail.anchor.set(0.5, 0);
-      assertionDetail.x = panelW / 2;
-      assertionDetail.y = yOffset + 38;
-      panel.addChild(assertionDetail);
+      snapshotText.x = 30;
+      snapshotText.y = yOffset + 28;
+      panel.addChild(snapshotText);
 
-      yOffset += 85;
+      // Save as Snapshot button (placeholder for now)
+      const saveBtn = new Button('Save Snapshot', 120, 28, this.soundManager);
+      saveBtn.x = panelW - 150;
+      saveBtn.y = yOffset + 95;
+      saveBtn.onClick(() => {
+        console.log('%c[Snapshot] Saving snapshot:', 'color: #66aaff;', snapshotData);
+        // TODO: Implement snapshot saving
+        alert('Snapshot saved! (To be implemented)');
+      });
+      panel.addChild(saveBtn);
+
+      yOffset += 145;
     }
 
     // Coverage section
@@ -195,10 +199,8 @@ export default class RunResultModal extends PIXI.Container {
     if (this.soundManager) {
       if (isLevelComplete) {
         this.soundManager.play('levelComplete');
-      } else if (assertionPassed) {
+      } else {
         this.soundManager.play('gemCollect');
-      } else if (assertionPassed === false) {
-        this.soundManager.play('error');
       }
     }
   }
