@@ -1,7 +1,7 @@
-import { TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH } from '../constants.js';
+import { TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, INVENTORY_PANEL_WIDTH } from '../constants.js';
 
-// Dungeon area width (viewport minus code panel)
-const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+// Dungeon area width (viewport minus code panel and inventory panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
 
 export default class Camera {
   constructor(worldContainer, offsetX = 0, offsetY = 0) {

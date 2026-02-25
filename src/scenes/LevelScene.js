@@ -14,6 +14,7 @@ import TestModal from '../ui/TestModal.js';
 import CodePanel from '../ui/CodePanel.js';
 import InventoryPanel from '../ui/InventoryPanel.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
+import CrystalSlot from '../ui/CrystalSlot.js';
 import Button from '../ui/Button.js';
 import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
@@ -47,9 +48,13 @@ export default class LevelScene {
     // Track test runs for the Test modal
     this.testRuns = [];
 
-    // Inventory panel and weapon slots
+    // Inventory panel and weapon/crystal slots
     this.inventoryPanel = null;
     this.weaponSlots = null;
+    this.crystalSlot = null;
+
+    // Execution result for crystal assertion
+    this.executionResult = null;
 
     // Drag state
     this.dragState = null; // { type: 'weapon'|'crystal', id, sprite, active }
@@ -309,13 +314,21 @@ export default class LevelScene {
     const entryY = this.currentLayout.entry.y;
     this.weaponSlots.setParams(paramHints, entryX, entryY);
     this.weaponSlots.onRun(() => {
-      if (this.weaponSlots.allFilled()) {
+      if (this._canRun()) {
         const values = this.weaponSlots.getValues();
         this._hideWeaponUI();
         this._executeWithInputs(values);
       }
     });
     this.worldContainer.addChild(this.weaponSlots);
+
+    // Create crystal slot positioned on same line as weapon slots, to the right
+    this.crystalSlot = new CrystalSlot(this.soundManager);
+    this.crystalSlot.setSlotPosition(
+      this.weaponSlots.slotOffsetY,
+      this.weaponSlots.getEndX()
+    );
+    this.worldContainer.addChild(this.crystalSlot);
 
     // Create inventory panel (right side - weapons on top, crystals on bottom)
     // Add to main container so it can be positioned at the right edge of the screen
@@ -521,6 +534,15 @@ export default class LevelScene {
       // Return to setup phase
       this.gameState.setPhase(PHASES.SETUP);
       this.weaponSlots.reset();
+      if (this.crystalSlot) {
+        this.crystalSlot.reset();
+      }
+      // Show the UI again
+      if (this.weaponSlots) this.weaponSlots.visible = true;
+      if (this.crystalSlot) this.crystalSlot.visible = true;
+      if (this.inventoryPanel) this.inventoryPanel.show();
+      // Update run button visibility (should be hidden after reset)
+      this._updateRunButtonVisibility();
     };
 
     btn.on('pointertap', closeOverlay);
@@ -536,10 +558,25 @@ export default class LevelScene {
     if (this.weaponSlots) {
       this.weaponSlots.visible = false;
     }
+    if (this.crystalSlot) {
+      this.crystalSlot.visible = false;
+    }
     this._cancelDrag();
     this.container.off('pointermove', this._onPointerMove);
     this.container.off('pointerup', this._onPointerUp);
     this.container.off('pointerupoutside', this._onPointerUp);
+  }
+
+  _canRun() {
+    const weaponsFilled = this.weaponSlots && this.weaponSlots.allFilled();
+    const crystalFilled = this.crystalSlot && this.crystalSlot.hasCrystal();
+    return weaponsFilled && crystalFilled;
+  }
+
+  _updateRunButtonVisibility() {
+    if (this.weaponSlots && this.weaponSlots.runButton) {
+      this.weaponSlots.runButton.visible = this._canRun();
+    }
   }
 
   // --- Drag & Drop ---
@@ -619,11 +656,18 @@ export default class LevelScene {
         const weapon = this.weaponInventory.get(this.dragState.id);
         if (weapon) {
           this.weaponSlots.dropWeapon(slotIdx, weapon);
+          this._updateRunButtonVisibility();
         }
       }
     } else if (this.dragState.type === 'crystal') {
-      // Crystal drop handling - will be implemented when crystal slots are added
-      // For now, just cancel the drag
+      // Check if dropped on crystal slot
+      if (this.crystalSlot && this.crystalSlot.isOverSlot(pos.x, pos.y)) {
+        const crystal = this.crystalInventory.get(this.dragState.id);
+        if (crystal) {
+          this.crystalSlot.dropCrystal(crystal);
+          this._updateRunButtonVisibility();
+        }
+      }
     }
 
     // Remove drag sprite
@@ -673,6 +717,9 @@ export default class LevelScene {
 
     // Store the current inputs for test tracking
     this._currentRunInputs = values;
+
+    // Store execution result for crystal assertion evaluation
+    this.executionResult = result;
 
     if (coverageData) {
       this.coverageData = coverageData;
@@ -1003,6 +1050,9 @@ export default class LevelScene {
     // Highlight all covered lines (including branch lines like 'else')
     this._highlightCoveredLines();
 
+    // Evaluate crystal assertion
+    this._evaluateCrystal();
+
     const isComplete = this.coverageTracker.isFullCoverage();
 
     // Save the test case (inputs only - coverage is computed by replaying tests)
@@ -1040,6 +1090,34 @@ export default class LevelScene {
         this.soundManager.play('sceneTransition');
       }
       this._returnToStart();
+    }
+  }
+
+  _evaluateCrystal() {
+    if (!this.crystalSlot || !this.crystalSlot.hasCrystal()) return;
+
+    const crystal = this.crystalSlot.getCrystal();
+    const evaluationResult = this.crystalInventory.evaluate(crystal, this.executionResult);
+
+    console.log('%c[LevelScene] Crystal evaluation:', 'color: #aa88ff;', {
+      crystal: crystal.name,
+      expected: evaluationResult.expected,
+      actual: evaluationResult.actual,
+      operator: evaluationResult.operator,
+      passed: evaluationResult.pass,
+    });
+
+    // Show the result on the crystal slot
+    this.crystalSlot.visible = true;
+    this.crystalSlot.showResult(evaluationResult.pass, this.executionResult);
+
+    // Play appropriate sound
+    if (this.soundManager) {
+      if (evaluationResult.pass) {
+        this.soundManager.play('gemCollect');
+      } else {
+        this.soundManager.play('error');
+      }
     }
   }
 
@@ -1151,6 +1229,10 @@ export default class LevelScene {
         // Animate weapon slots glow effect
         if (this.weaponSlots) {
           this.weaponSlots.update(delta);
+        }
+        // Animate crystal slot glow effect
+        if (this.crystalSlot) {
+          this.crystalSlot.update(delta);
         }
         break;
       case PHASES.EXECUTING:

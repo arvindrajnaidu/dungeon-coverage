@@ -328,6 +328,13 @@ export default class WeaponSlots extends PIXI.Container {
     }
   }
 
+  getEndX() {
+    // Return the X position after the last slot
+    if (this.slots.length === 0) return 0;
+    const lastSlot = this.slots[this.slots.length - 1];
+    return lastSlot.bg.x + SLOT_W;
+  }
+
   _updateRunButton() {
     if (this.runButton) {
       this.runButton.visible = this.allFilled();
