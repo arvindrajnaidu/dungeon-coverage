@@ -10,7 +10,6 @@ export default class HUD {
   constructor(soundManager = null) {
     this.container = new PIXI.Container();
     this.soundManager = soundManager;
-    this.onCodeButton = null;
     this.onTestButton = null;
     this.onForgeButton = null;
     this.onResetButton = null;
@@ -43,41 +42,32 @@ export default class HUD {
     this.runText.y = 24;
     this.container.addChild(this.runText);
 
-    // View Code button
-    this.codeBtn = new Button('{} Code ', 80, 28);
-    this.codeBtn.x = 110;
-    this.codeBtn.y = 8;
-    this.codeBtn.onClick(() => {
-      if (this.onCodeButton) this.onCodeButton();
+    // Reset Tests button
+    this.resetBtn = new Button('Reset', 60, 28);
+    this.resetBtn.x = 110;
+    this.resetBtn.y = 8;
+    this.resetBtn.onClick(() => {
+      if (this.onResetButton) this.onResetButton();
     });
-    this.container.addChild(this.codeBtn);
+    this.container.addChild(this.resetBtn);
 
     // View Test button
-    this.testBtn = new Button(' {} Test', 80, 28);
-    this.testBtn.x = 200;
+    this.testBtn = new Button('Tests', 60, 28);
+    this.testBtn.x = 180;
     this.testBtn.y = 8;
     this.testBtn.onClick(() => {
       if (this.onTestButton) this.onTestButton();
     });
     this.container.addChild(this.testBtn);
 
-    // Forge button
-    this.forgeBtn = new Button('Forge', 70, 28);
-    this.forgeBtn.x = 290;
+    // Forge button (wider - important action)
+    this.forgeBtn = new Button('⚒ Forge', 100, 28);
+    this.forgeBtn.x = 250;
     this.forgeBtn.y = 8;
     this.forgeBtn.onClick(() => {
       if (this.onForgeButton) this.onForgeButton();
     });
     this.container.addChild(this.forgeBtn);
-
-    // Reset Tests button
-    this.resetBtn = new Button('Reset', 60, 28);
-    this.resetBtn.x = 370;
-    this.resetBtn.y = 8;
-    this.resetBtn.onClick(() => {
-      if (this.onResetButton) this.onResetButton();
-    });
-    this.container.addChild(this.resetBtn);
 
     // Coverage progress bar
     this.coverageBar = new ProgressBar(280, 14);

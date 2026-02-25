@@ -34,13 +34,58 @@ export default class CodePanel extends PIXI.Container {
     headerBg.endFill();
     this.header.addChild(headerBg);
 
+    // Back button
+    this._onBackCallback = null;
+    this.backBtn = new PIXI.Container();
+    this.backBtn.x = 8;
+    this.backBtn.y = 6;
+    this.backBtn.eventMode = 'static';
+    this.backBtn.cursor = 'pointer';
+
+    const backBg = new PIXI.Graphics();
+    backBg.beginFill(0x333355, 0.8);
+    backBg.lineStyle(1, 0x555577);
+    backBg.drawRoundedRect(0, 0, 50, 20, 4);
+    backBg.endFill();
+    this.backBtn.addChild(backBg);
+
+    const backText = new PIXI.Text('← Back', {
+      fontFamily: 'monospace',
+      fontSize: 10,
+      fill: 0xaaaacc,
+    });
+    backText.x = 6;
+    backText.y = 3;
+    this.backBtn.addChild(backText);
+
+    this.backBtn.on('pointerover', () => {
+      backBg.clear();
+      backBg.beginFill(0x444466, 0.9);
+      backBg.lineStyle(1, 0x6666aa);
+      backBg.drawRoundedRect(0, 0, 50, 20, 4);
+      backBg.endFill();
+    });
+    this.backBtn.on('pointerout', () => {
+      backBg.clear();
+      backBg.beginFill(0x333355, 0.8);
+      backBg.lineStyle(1, 0x555577);
+      backBg.drawRoundedRect(0, 0, 50, 20, 4);
+      backBg.endFill();
+    });
+    this.backBtn.on('pointertap', () => {
+      if (this._onBackCallback) this._onBackCallback();
+    });
+
+    this.header.addChild(this.backBtn);
+
+    // Title (to the right of back button)
     this.titleText = new PIXI.Text('Source Code', {
       fontFamily: 'monospace',
       fontSize: 12,
       fontWeight: 'bold',
       fill: 0x8b949e,
     });
-    this.titleText.x = 12;
+    this.titleText.x = 66;
     this.titleText.y = 8;
     this.header.addChild(this.titleText);
 
@@ -364,6 +409,10 @@ export default class CodePanel extends PIXI.Container {
       this.scrollY = Math.min(this.maxScroll, Math.max(0, this.scrollY + e.deltaY * 0.5));
       this.codeContainer.y = 36 - this.scrollY;
     }
+  }
+
+  onBack(callback) {
+    this._onBackCallback = callback;
   }
 
   destroy(options) {

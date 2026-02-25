@@ -10,7 +10,6 @@ import CoverageRunner from '../coverage/CoverageRunner.js';
 import CoverageTracker from '../coverage/CoverageTracker.js';
 import CoverageMapper from '../coverage/CoverageMapper.js';
 import Camera from '../engine/Camera.js';
-import CodeModal from '../ui/CodeModal.js';
 import TestModal from '../ui/TestModal.js';
 import CodePanel from '../ui/CodePanel.js';
 import WeaponSidebar from '../ui/WeaponSidebar.js';
@@ -40,7 +39,6 @@ export default class LevelScene {
     this.dungeonMap = null;
     this.gemManager = null;
     this.hud = null;
-    this.codeModal = null;
     this.testModal = null;
     this.codePanel = null;
     this.camera = null;
@@ -123,18 +121,44 @@ export default class LevelScene {
   _highlightCoveredLines() {
     if (!this.codePanel) return;
 
-    const aggregated = this.coverageTracker.getAggregatedCoverage();
-    if (!aggregated) return;
+    const coverage = this.coverageTracker.getAggregatedCoverage();
+    if (!coverage) return;
+
+    // Helper to highlight start and end lines of a location (for closing brackets)
+    const highlightLoc = (loc) => {
+      if (loc?.start?.line) {
+        this.codePanel.highlightLine(loc.start.line, false);
+      }
+      // Also highlight end line for closing brackets
+      if (loc?.end?.line && loc.end.line !== loc.start?.line) {
+        this.codePanel.highlightLine(loc.end.line, false);
+      }
+    };
 
     // Get all covered statement lines
-    const statementMap = aggregated.statementMap;
-    const s = aggregated.s;
+    const statementMap = coverage.statementMap;
+    const s = coverage.s;
 
     for (const stmtId of Object.keys(statementMap)) {
       if (s[stmtId] > 0) {
-        const loc = statementMap[stmtId];
-        if (loc?.start?.line) {
-          this.codePanel.highlightLine(loc.start.line, false);
+        highlightLoc(statementMap[stmtId]);
+      }
+    }
+
+    // Also highlight lines from covered branches (handles 'else' keyword lines)
+    const branchMap = coverage.branchMap;
+    const b = coverage.b;
+
+    if (branchMap && b) {
+      for (const branchId of Object.keys(branchMap)) {
+        const branch = branchMap[branchId];
+        const branchCounts = b[branchId];
+        if (branch?.locations && branchCounts) {
+          for (let i = 0; i < branch.locations.length; i++) {
+            if (branchCounts[i] > 0) {
+              highlightLoc(branch.locations[i]);
+            }
+          }
         }
       }
     }
@@ -173,6 +197,9 @@ export default class LevelScene {
     this.codePanel.x = 0;
     this.codePanel.y = 0;
     this.codePanel.setSource(this.levelData.source, this.levelData.name);
+    this.codePanel.onBack(() => {
+      this.sceneManager.switchTo('title');
+    });
     this.container.addChild(this.codePanel);
 
     // Highlight any previously covered lines from saved tests
@@ -222,19 +249,10 @@ export default class LevelScene {
 
     // HUD
     this.hud = new HUD(this.soundManager);
-    this.hud.onCodeButton = () => {
-      if (this.codeModal.visible) {
-        this.codeModal.hide();
-      } else {
-        if (this.testModal.visible) this.testModal.hide();
-        this.codeModal.show(this.levelData.source, this.levelData.name);
-      }
-    };
     this.hud.onTestButton = () => {
       if (this.testModal.visible) {
         this.testModal.hide();
       } else {
-        if (this.codeModal.visible) this.codeModal.hide();
         this.testModal.show(this.testRuns, this.levelData.fnName, this.levelData.name);
       }
     };
@@ -247,10 +265,6 @@ export default class LevelScene {
       this._resetTests();
     };
     this.uiContainer.addChild(this.hud.getContainer());
-
-    // Code modal
-    this.codeModal = new CodeModal();
-    this.uiContainer.addChild(this.codeModal.getContainer());
 
     // Test modal
     this.testModal = new TestModal();
@@ -936,6 +950,9 @@ export default class LevelScene {
       stmtCov.total
     );
 
+    // Highlight all covered lines (including branch lines like 'else')
+    this._highlightCoveredLines();
+
     const isComplete = this.coverageTracker.isFullCoverage();
 
     // Save the test case (inputs only - coverage is computed by replaying tests)
@@ -1080,6 +1097,10 @@ export default class LevelScene {
         // Waiting for weapon drag-drop - but still animate player idle
         if (this.player) {
           this.player.update();
+        }
+        // Animate weapon slots glow effect
+        if (this.weaponSlots) {
+          this.weaponSlots.update(delta);
         }
         break;
       case PHASES.EXECUTING:

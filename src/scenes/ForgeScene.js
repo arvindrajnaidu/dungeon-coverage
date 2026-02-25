@@ -56,7 +56,7 @@ export default class ForgeScene {
     const panel = document.createElement('div');
     panel.style.cssText = `
       background: #0f3460; border: 2px solid #533483; border-radius: 12px;
-      padding: 24px 32px; width: 640px; max-height: 80vh;
+      padding: 24px 32px; width: 800px; max-height: 85vh;
       color: #e0e0e0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       display: flex; flex-direction: column;
     `;
@@ -121,19 +121,19 @@ export default class ForgeScene {
     }
     craftPanel.appendChild(typeRow);
 
-    // Value input
+    // Value input (textarea for larger inputs like JSON)
     const valueLabel = document.createElement('div');
     valueLabel.textContent = 'Value';
     valueLabel.style.cssText = 'font-size: 12px; color: #aaaacc; margin-top: 4px;';
     craftPanel.appendChild(valueLabel);
 
-    const valueInput = document.createElement('input');
-    valueInput.type = 'text';
+    const valueInput = document.createElement('textarea');
     valueInput.placeholder = 'Enter a number';
+    valueInput.rows = 4;
     valueInput.style.cssText = `
       width: 100%; padding: 8px 10px; background: #1a1a2e; border: 1px solid #533483;
       border-radius: 6px; color: #e0e0e0; font-family: monospace; font-size: 13px;
-      outline: none; box-sizing: border-box;
+      outline: none; box-sizing: border-box; resize: vertical; min-height: 80px;
     `;
     valueInput.addEventListener('focus', () => { valueInput.style.borderColor = '#7a4aaa'; });
     valueInput.addEventListener('blur', () => { valueInput.style.borderColor = '#533483'; });
@@ -224,8 +224,28 @@ export default class ForgeScene {
     const invList = document.createElement('div');
     invList.style.cssText = `
       flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
-      max-height: 320px; padding-right: 4px;
+      max-height: 320px; padding-right: 8px;
     `;
+    // Add custom scrollbar styling
+    invList.classList.add('forge-inv-list');
+    const style = document.createElement('style');
+    style.textContent = `
+      .forge-inv-list::-webkit-scrollbar {
+        width: 8px;
+      }
+      .forge-inv-list::-webkit-scrollbar-track {
+        background: #1a1a2e;
+        border-radius: 4px;
+      }
+      .forge-inv-list::-webkit-scrollbar-thumb {
+        background: #533483;
+        border-radius: 4px;
+      }
+      .forge-inv-list::-webkit-scrollbar-thumb:hover {
+        background: #7a4aaa;
+      }
+    `;
+    overlay.appendChild(style);
     invPanel.appendChild(invList);
 
     content.appendChild(invPanel);
@@ -302,6 +322,9 @@ export default class ForgeScene {
   }
 
   _updateAutoName(nameInput, valueInput) {
+    // Don't auto-update name when editing an existing weapon
+    if (this.editingWeaponId) return;
+
     const raw = valueInput.value.trim();
     if (!raw) {
       nameInput.value = '';

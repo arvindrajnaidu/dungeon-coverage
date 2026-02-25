@@ -84,18 +84,25 @@ export default class WeaponInventory {
   _load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return;
-      for (const w of arr) {
-        w.color = WeaponInventory.colorForType(w.type);
-        this.weapons.set(w.id, w);
-        // Keep _nextId ahead of any loaded id
-        const num = parseInt(w.id.replace('w', ''), 10);
-        if (num >= _nextId) _nextId = num + 1;
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          for (const w of arr) {
+            w.color = WeaponInventory.colorForType(w.type);
+            this.weapons.set(w.id, w);
+            // Keep _nextId ahead of any loaded id
+            const num = parseInt(w.id.replace('w', ''), 10);
+            if (num >= _nextId) _nextId = num + 1;
+          }
+        }
       }
     } catch (e) {
       // Corrupt data — start fresh
+    }
+
+    // Add default weapon if inventory is empty
+    if (this.weapons.size === 0) {
+      this.add('number', 2, 'Rune of 2');
     }
   }
 

@@ -24,10 +24,11 @@ export default class WeaponSlots extends PIXI.Container {
     super();
     this.spriteManager = spriteManager;
     this.soundManager = soundManager;
-    this.slots = [];       // { paramName, type, bg, label, weapon, icon, nameText }
+    this.slots = [];       // { paramName, type, bg, glow, label, weapon, icon, nameText }
     this.runButton = null;
     this._onRunCb = null;
     this.slotOffsetY = 0;  // Y offset for slots relative to container
+    this.animTime = 0;     // Animation time for pulsating effect
   }
 
   setParams(paramHints, entryX, entryY) {
@@ -57,7 +58,15 @@ export default class WeaponSlots extends PIXI.Container {
         weapon: null,
         icon: null,
         nameText: null,
+        glow: null,
       };
+
+      // Glow effect (behind background)
+      const glow = new PIXI.Graphics();
+      glow.x = slotX;
+      glow.y = this.slotOffsetY;
+      this.addChild(glow);
+      slot.glow = glow;
 
       // Background
       const bg = new PIXI.Graphics();
@@ -67,13 +76,26 @@ export default class WeaponSlots extends PIXI.Container {
       this.addChild(bg);
       slot.bg = bg;
 
-      // Label (param name + abbreviated type hint)
-      const typeAbbrev = abbreviateType(hint.type);
-      const labelText = typeAbbrev ? `${hint.name} (${typeAbbrev})` : hint.name;
-      const label = new PIXI.Text(labelText, {
+      // Type label (above slot, aligned right)
+      if (hint.type) {
+        const typeLabel = new PIXI.Text(hint.type, {
+          fontFamily: 'monospace',
+          fontSize: 11,
+          fill: 0x66cc99,
+          fontWeight: 'bold',
+        });
+        typeLabel.anchor.set(1, 1); // anchor bottom-right
+        typeLabel.x = slotX + SLOT_W - 4;
+        typeLabel.y = this.slotOffsetY - 8;
+        this.addChild(typeLabel);
+        slot.typeLabel = typeLabel;
+      }
+
+      // Parameter name label (centered in slot)
+      const label = new PIXI.Text(hint.name, {
         fontFamily: 'monospace',
-        fontSize: 10,
-        fill: 0x888899,
+        fontSize: 11,
+        fill: 0xaaaacc,
         align: 'center',
       });
       label.anchor.set(0.5);
@@ -149,11 +171,42 @@ export default class WeaponSlots extends PIXI.Container {
       g.beginFill(0x1a2a4e, 0.9);
       g.lineStyle(2, 0x7a4aaa);
     } else {
-      g.beginFill(0x111133, 0.7);
-      g.lineStyle(2, 0x444466, 0.8);
+      g.beginFill(0x111122, 0.85);
+      g.lineStyle(2, 0x44cc66, 0.9);
     }
     g.drawRoundedRect(0, 0, SLOT_W, SLOT_H, 6);
     g.endFill();
+  }
+
+  _drawSlotGlow(g, intensity) {
+    g.clear();
+    if (intensity <= 0) return;
+
+    // Outer glow layers
+    const glowColor = 0x44ff66;
+    const layers = 3;
+    for (let i = layers; i >= 1; i--) {
+      const expand = i * 3;
+      const alpha = intensity * (0.15 / i);
+      g.lineStyle(expand, glowColor, alpha);
+      g.drawRoundedRect(-expand / 2, -expand / 2, SLOT_W + expand, SLOT_H + expand, 6 + expand / 2);
+    }
+  }
+
+  update(delta) {
+    this.animTime += delta * 0.05;
+
+    // Pulsate empty slots
+    for (const slot of this.slots) {
+      if (!slot.weapon && slot.glow) {
+        // Pulsate between 0.4 and 1.0 intensity
+        const pulse = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(this.animTime * 2));
+        this._drawSlotGlow(slot.glow, pulse);
+      } else if (slot.glow) {
+        // Clear glow for filled slots
+        slot.glow.clear();
+      }
+    }
   }
 
   dropWeapon(slotIdx, weapon) {
@@ -181,8 +234,9 @@ export default class WeaponSlots extends PIXI.Container {
       this.soundManager.play('weaponDrop');
     }
 
-    // Hide placeholder label
+    // Hide placeholder label and type label
     slot.label.visible = false;
+    if (slot.typeLabel) slot.typeLabel.visible = false;
 
     // Draw filled bg
     this._drawSlotBg(slot.bg, true);
@@ -220,6 +274,7 @@ export default class WeaponSlots extends PIXI.Container {
     this._clearSlotDisplay(slot);
     slot.weapon = null;
     slot.label.visible = true;
+    if (slot.typeLabel) slot.typeLabel.visible = true;
     this._drawSlotBg(slot.bg, false);
     this._updateRunButton();
   }
@@ -299,18 +354,21 @@ export default class WeaponSlots extends PIXI.Container {
   }
 
   _showTypeError(slot, weaponType) {
-    // Create error message with abbreviated types
-    const expectedType = abbreviateType(slot.type) || 'any';
-    const gotType = abbreviateType(weaponType);
-    const errorText = new PIXI.Text(`Need ${expectedType}, got ${gotType}`, {
+    // Hide type label while error is shown
+    if (slot.typeLabel) slot.typeLabel.visible = false;
+
+    // Create error message with full type names
+    const expectedType = slot.type || 'any';
+    const errorText = new PIXI.Text(`Need ${expectedType}`, {
       fontFamily: 'monospace',
-      fontSize: 10,
-      fill: 0xff4444,
+      fontSize: 11,
+      fill: 0xff6666,
       align: 'center',
+      fontWeight: 'bold',
     });
     errorText.anchor.set(0.5);
     errorText.x = slot.bg.x + SLOT_W / 2;
-    errorText.y = this.slotOffsetY - 12;
+    errorText.y = this.slotOffsetY - 10;
     this.addChild(errorText);
 
     // Flash the slot red
@@ -324,6 +382,8 @@ export default class WeaponSlots extends PIXI.Container {
         errorText.destroy();
       }
       this._drawSlotBg(originalBg, slot.weapon !== null);
+      // Show type label again
+      if (slot.typeLabel) slot.typeLabel.visible = true;
     }, 1500);
   }
 

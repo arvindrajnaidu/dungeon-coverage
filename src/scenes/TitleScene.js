@@ -198,24 +198,22 @@ export default class TitleScene {
   }
 
   _resetAllData() {
-    // Clear all game-related localStorage keys
+    // Clear all game-related localStorage keys EXCEPT weapons
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && (key.startsWith('dungeon-coverage') || key.startsWith('dc-'))) {
-        keysToRemove.push(key);
+        // Keep weapons - only reset level progress
+        if (key !== 'dungeon-coverage-weapons') {
+          keysToRemove.push(key);
+        }
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
 
-    // Reset progress manager
+    // Reset progress manager (level progress only)
     if (this.progressManager) {
       this.progressManager.resetAll();
-    }
-
-    // Clear weapon inventory
-    if (this.weaponInventory) {
-      this.weaponInventory.clear();
     }
 
     // Play sound

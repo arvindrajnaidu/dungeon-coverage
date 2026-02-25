@@ -15,7 +15,7 @@ export default class Player {
     // Movement interpolation
     this.targetPixelX = 0;
     this.targetPixelY = 0;
-    this.moveSpeed = 2; // pixels per frame (slow walk)
+    this.moveSpeed = 4; // pixels per frame
 
     // Auto-walk path
     this.walkPath = []; // array of { x, y, action } - action is 'walk' or 'teleport'

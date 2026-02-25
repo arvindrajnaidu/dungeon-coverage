@@ -18,19 +18,14 @@ export default {
 async function fetchData(apiCall) {
   let data = null;
   const response = await apiCall();
-  console.log('response', response);
   if (response.ok) {
-    console.log('response.data', response.data);
     data = response.data;
     if (data.length > 0) {
-      console.log('data.map(item => item.name)', data.map(item => item.name));
       data = data.map(item => item.name);
     } else {
-      console.log('data is empty');
       data = ['empty'];
     }
   } else {
-    console.log('response is not ok');
     data = ['error: ' + response.status];
   }
   return data;
