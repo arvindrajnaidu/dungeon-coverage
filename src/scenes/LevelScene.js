@@ -246,8 +246,9 @@ export default class LevelScene {
     this.player.setPosition(this.currentLayout.entry.x, this.currentLayout.entry.y);
     this.worldContainer.addChild(this.player.getContainer());
 
-    // Camera - pass offset to position dungeon to the right of code panel
-    this.camera = new Camera(this.worldContainer, this.dungeonOffsetX, this.cameraOffsetY);
+    // Camera - pass offset to position dungeon centered between code panel and inventory panel
+    const dungeonWidth = screenW - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
+    this.camera = new Camera(this.worldContainer, this.dungeonOffsetX, this.cameraOffsetY, dungeonWidth);
     this.camera.snapTo(this.currentLayout.entry.x, this.currentLayout.entry.y);
 
     // Position UI container with offset (after code panel)
