@@ -15,6 +15,7 @@ import CodePanel from '../ui/CodePanel.js';
 import InventoryPanel from '../ui/InventoryPanel.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
 import CrystalSlot from '../ui/CrystalSlot.js';
+import RunResultModal from '../ui/RunResultModal.js';
 import Button from '../ui/Button.js';
 import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
@@ -42,6 +43,7 @@ export default class LevelScene {
     this.gemManager = null;
     this.hud = null;
     this.testModal = null;
+    this.runResultModal = null;
     this.codePanel = null;
     this.camera = null;
 
@@ -283,6 +285,21 @@ export default class LevelScene {
     this.testModal = new TestModal();
     this.uiContainer.addChild(this.testModal.getContainer());
 
+    // Run result modal
+    this.runResultModal = new RunResultModal(this.soundManager);
+    this.runResultModal.onContinue((isLevelComplete) => {
+      if (isLevelComplete) {
+        this.sceneManager.switchTo('result', {
+          gameState: this.gameState,
+          levelScene: this,
+          coverageTracker: this.coverageTracker,
+        });
+      } else {
+        this._returnToStart();
+      }
+    });
+    this.uiContainer.addChild(this.runResultModal);
+
     this.gameState.setPhase(PHASES.SETUP);
 
     // Setup weapon slots and sidebar
@@ -309,11 +326,13 @@ export default class LevelScene {
     // Check if player has weapons
     const hasWeapons = this.weaponInventory.getAll().length > 0;
 
-    // Create weapon slots positioned above the entry point
+    const crystalSlotWidth = 160; // Match SLOT_W in CrystalSlot.js
+
+    // Create weapon slots centered above entry point (accounting for crystal slot width)
     this.weaponSlots = new WeaponSlots(this.spriteManager, this.soundManager);
     const entryX = this.currentLayout.entry.x;
     const entryY = this.currentLayout.entry.y;
-    this.weaponSlots.setParams(paramHints, entryX, entryY);
+    this.weaponSlots.setParams(paramHints, entryX, entryY, null, crystalSlotWidth);
     this.weaponSlots.onRun(() => {
       if (this._canRun()) {
         const values = this.weaponSlots.getValues();
@@ -1076,26 +1095,35 @@ export default class LevelScene {
       this.progressManager.markLevelCompleted(this.gameState.currentLevel, this.gameState.score);
     }
 
-    // Check if level is complete (100% coverage)
-    if (isComplete) {
-      // Show Level Complete screen
-      this.gameState.setPhase(PHASES.RESULTS);
-      this.sceneManager.switchTo('result', {
-        gameState: this.gameState,
-        levelScene: this,
-        coverageTracker: this.coverageTracker,
-      });
-    } else {
-      // Not complete - play sound and return hero to start for another run
-      if (this.soundManager) {
-        this.soundManager.play('sceneTransition');
-      }
-      this._returnToStart();
-    }
+    // Get dungeon dimensions for modal
+    const gameApp = this.sceneManager.gameApp;
+    const screenW = gameApp.getScreenWidth();
+    const screenH = gameApp.getScreenHeight();
+    const dungeonWidth = screenW - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
+    const dungeonHeight = screenH;
+
+    // Show run result modal
+    this.gameState.setPhase(PHASES.RESULTS);
+    this.runResultModal.show({
+      assertionPassed: this._lastCrystalEvaluation?.passed ?? null,
+      assertionName: this._lastCrystalEvaluation?.crystalName || '',
+      actualValue: this._lastCrystalEvaluation?.actual,
+      expectedValue: this._lastCrystalEvaluation?.expected,
+      operator: this._lastCrystalEvaluation?.operator || '',
+      stmtCoverage: stmtCov.percent,
+      branchCoverage: branchCov.percent,
+      runNumber: this.gameState.runNumber,
+      isLevelComplete: isComplete,
+      dungeonWidth,
+      dungeonHeight,
+    });
   }
 
   _evaluateCrystal() {
-    if (!this.crystalSlot || !this.crystalSlot.hasCrystal()) return;
+    if (!this.crystalSlot || !this.crystalSlot.hasCrystal()) {
+      this._lastCrystalEvaluation = null;
+      return;
+    }
 
     const crystal = this.crystalSlot.getCrystal();
     const evaluationResult = this.crystalInventory.evaluate(crystal, this.executionResult);
@@ -1108,18 +1136,14 @@ export default class LevelScene {
       passed: evaluationResult.pass,
     });
 
-    // Show the result on the crystal slot
-    this.crystalSlot.visible = true;
-    this.crystalSlot.showResult(evaluationResult.pass, this.executionResult);
-
-    // Play appropriate sound
-    if (this.soundManager) {
-      if (evaluationResult.pass) {
-        this.soundManager.play('gemCollect');
-      } else {
-        this.soundManager.play('error');
-      }
-    }
+    // Store evaluation result for the modal
+    this._lastCrystalEvaluation = {
+      passed: evaluationResult.pass,
+      crystalName: crystal.name,
+      expected: evaluationResult.expected,
+      actual: evaluationResult.actual,
+      operator: evaluationResult.operator,
+    };
   }
 
   _returnToStart() {

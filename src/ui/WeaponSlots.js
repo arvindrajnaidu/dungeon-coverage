@@ -31,19 +31,23 @@ export default class WeaponSlots extends PIXI.Container {
     this.animTime = 0;     // Animation time for pulsating effect
   }
 
-  setParams(paramHints, entryX, entryY) {
+  setParams(paramHints, entryX, entryY, dungeonCenterX = null, crystalSlotWidth = 0) {
     this.removeChildren();
     this.slots = [];
 
     const count = paramHints.length;
-    const totalW = count * SLOT_W + (count - 1) * SLOT_GAP;
+    const weaponsWidth = count * SLOT_W + (count - 1) * SLOT_GAP;
 
-    // Position slots centered above the entry point
+    // Total width including crystal slot (with gap)
+    const gap = 12; // Gap between weapons and crystal
+    const totalWidth = weaponsWidth + (crystalSlotWidth > 0 ? gap + crystalSlotWidth : 0);
+
+    // Position slots centered in dungeon area, or above entry point if no center provided
     const entryPixelX = entryX * TILE_SIZE + TILE_SIZE / 2;
     const entryPixelY = entryY * TILE_SIZE;
 
-    // Center the slots horizontally above entry
-    const startX = entryPixelX - totalW / 2;
+    const centerX = dungeonCenterX !== null ? dungeonCenterX : entryPixelX;
+    const startX = centerX - totalWidth / 2;
 
     // Position above entry point with some padding
     this.slotOffsetY = entryPixelY - SLOT_H - 60; // 60px above entry
