@@ -1,10 +1,10 @@
 import * as PIXI from 'pixi.js';
-import { COLORS, VIEWPORT_WIDTH, CODE_PANEL_WIDTH, PHASES } from '../constants.js';
+import { COLORS, VIEWPORT_WIDTH, CODE_PANEL_WIDTH, INVENTORY_PANEL_WIDTH, PHASES } from '../constants.js';
 import ProgressBar from '../ui/ProgressBar.js';
 import Button from '../ui/Button.js';
 
-// Dungeon area width (viewport minus code panel)
-const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+// Dungeon area width (viewport minus code panel and inventory panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
 
 export default class HUD {
   constructor(soundManager = null) {
@@ -12,6 +12,7 @@ export default class HUD {
     this.soundManager = soundManager;
     this.onTestButton = null;
     this.onForgeButton = null;
+    this.onCrystalForgeButton = null;
     this.onResetButton = null;
 
     // Background bar (spans dungeon area only)
@@ -68,6 +69,15 @@ export default class HUD {
       if (this.onForgeButton) this.onForgeButton();
     });
     this.container.addChild(this.forgeBtn);
+
+    // Crystal Forge button
+    this.crystalBtn = new Button('🔮 Crystals', 100, 28);
+    this.crystalBtn.x = 360;
+    this.crystalBtn.y = 8;
+    this.crystalBtn.onClick(() => {
+      if (this.onCrystalForgeButton) this.onCrystalForgeButton();
+    });
+    this.container.addChild(this.crystalBtn);
 
     // Coverage progress bar
     this.coverageBar = new ProgressBar(280, 14);
@@ -173,8 +183,9 @@ export default class HUD {
     this.coverageLabel.text = `Stmt: ${Math.round(gameState.coveragePercent)}% | Branch: ${Math.round(gameState.branchCoveragePercent)}%`;
     this.gemsText.text = `Gems: ${gameState.collectedGems.size}/${gameState.totalGems}`;
 
-    // Show/hide Forge button based on phase
+    // Show/hide Forge buttons based on phase
     this.forgeBtn.visible = gameState.phase === PHASES.SETUP;
+    this.crystalBtn.visible = gameState.phase === PHASES.SETUP;
 
     // Sync mute button state
     if (this.soundManager) {

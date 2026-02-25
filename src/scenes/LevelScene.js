@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { PHASES, TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, DUNGEON_AREA_X } from '../constants.js';
+import { PHASES, TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, INVENTORY_PANEL_WIDTH, DUNGEON_AREA_X } from '../constants.js';
 import GameState from '../game/GameState.js';
 import Player from '../game/Player.js';
 import DungeonMap from '../game/DungeonMap.js';
@@ -12,17 +12,18 @@ import CoverageMapper from '../coverage/CoverageMapper.js';
 import Camera from '../engine/Camera.js';
 import TestModal from '../ui/TestModal.js';
 import CodePanel from '../ui/CodePanel.js';
-import WeaponSidebar from '../ui/WeaponSidebar.js';
+import InventoryPanel from '../ui/InventoryPanel.js';
 import WeaponSlots from '../ui/WeaponSlots.js';
 import Button from '../ui/Button.js';
 import SpriteManager from '../engine/SpriteManager.js';
 import levels from '../levels/index.js';
 
 export default class LevelScene {
-  constructor(sceneManager, spriteManager, weaponInventory, soundManager = null, progressManager = null) {
+  constructor(sceneManager, spriteManager, weaponInventory, crystalInventory, soundManager = null, progressManager = null) {
     this.sceneManager = sceneManager;
     this.spriteManager = spriteManager;
     this.weaponInventory = weaponInventory;
+    this.crystalInventory = crystalInventory;
     this.soundManager = soundManager;
     this.progressManager = progressManager;
     this.container = new PIXI.Container();
@@ -46,12 +47,12 @@ export default class LevelScene {
     // Track test runs for the Test modal
     this.testRuns = [];
 
-    // Weapon forge UI
-    this.weaponSidebar = null;
+    // Inventory panel and weapon slots
+    this.inventoryPanel = null;
     this.weaponSlots = null;
 
     // Drag state
-    this.dragState = null; // { weaponId, sprite, active }
+    this.dragState = null; // { type: 'weapon'|'crystal', id, sprite, active }
 
     this.currentLayout = null;
     this.levelData = null;
@@ -261,6 +262,11 @@ export default class LevelScene {
         this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
       }
     };
+    this.hud.onCrystalForgeButton = () => {
+      if (this.gameState.phase === PHASES.SETUP) {
+        this.sceneManager.switchTo('crystalForge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
+      }
+    };
     this.hud.onResetButton = () => {
       this._resetTests();
     };
@@ -277,6 +283,11 @@ export default class LevelScene {
   }
 
   _showWeaponUI() {
+    // Get screen dimensions first
+    const gameApp = this.sceneManager.gameApp;
+    const screenW = gameApp.getScreenWidth();
+    const screenH = gameApp.getScreenHeight();
+
     const paramNames = this.coverageRunner.extractParamNames(
       this.levelData.source,
       this.levelData.fnName
@@ -305,23 +316,26 @@ export default class LevelScene {
     });
     this.worldContainer.addChild(this.weaponSlots);
 
-    // Create weapon sidebar
-    this.weaponSidebar = new WeaponSidebar(this.spriteManager, this.weaponInventory);
-    this.weaponSidebar.onDragStart((weapon, e) => {
-      this._startDrag(weapon, e);
+    // Create inventory panel (right side - weapons on top, crystals on bottom)
+    // Add to main container so it can be positioned at the right edge of the screen
+    this.inventoryPanel = new InventoryPanel(this.spriteManager, this.weaponInventory, this.crystalInventory, INVENTORY_PANEL_WIDTH, screenH);
+    this.inventoryPanel.x = screenW - INVENTORY_PANEL_WIDTH;
+    this.inventoryPanel.y = 0;
+    this.inventoryPanel.onWeaponDrag((weapon, e) => {
+      this._startWeaponDrag(weapon, e);
     });
-    this.weaponSidebar.show();
-    this.uiContainer.addChild(this.weaponSidebar);
+    this.inventoryPanel.onCrystalDrag((crystal, e) => {
+      this._startCrystalDrag(crystal, e);
+    });
+    this.inventoryPanel.show();
+    this.container.addChild(this.inventoryPanel);
 
     // Show "no weapons" prompt if inventory is empty
     if (!hasWeapons) {
       this._showNoWeaponsPrompt();
     }
 
-    // Enable stage-level pointer events for drag (cover the dungeon area, not code panel)
-    const gameApp = this.sceneManager.gameApp;
-    const screenW = gameApp.getScreenWidth();
-    const screenH = gameApp.getScreenHeight();
+    // Enable stage-level pointer events for drag
     this.container.eventMode = 'static';
     // Hit area covers the full screen for drag tracking
     this.container.hitArea = new PIXI.Rectangle(0, 0, screenW, screenH);
@@ -333,8 +347,8 @@ export default class LevelScene {
   _showNoWeaponsPrompt() {
     this.noWeaponsOverlay = new PIXI.Container();
 
-    // Calculate dungeon area dimensions (excluding code panel)
-    const dungeonW = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+    // Calculate dungeon area dimensions (excluding code panel and inventory panel)
+    const dungeonW = VIEWPORT_WIDTH - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
     const dungeonH = VIEWPORT_HEIGHT;
 
     // Semi-transparent background
@@ -346,7 +360,7 @@ export default class LevelScene {
     this.noWeaponsOverlay.addChild(bg);
 
     // Panel
-    const panelW = 420;
+    const panelW = 380;
     const panelH = 200;
     const panel = new PIXI.Graphics();
     panel.beginFill(0x1a1a3e);
@@ -358,7 +372,7 @@ export default class LevelScene {
     // Title
     const title = new PIXI.Text('No Weapons Yet!', {
       fontFamily: 'monospace',
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: 'bold',
       fill: 0xffaa44,
     });
@@ -368,9 +382,9 @@ export default class LevelScene {
     this.noWeaponsOverlay.addChild(title);
 
     // Description
-    const desc = new PIXI.Text('To explore this dungeon, you need to forge weapons first.\nWeapons are test inputs (numbers, strings, arrays, etc.)\nthat you drag into the function parameter slots.', {
+    const desc = new PIXI.Text('To explore this dungeon, forge weapons first.\nWeapons are test inputs that you drag\ninto the function parameter slots.', {
       fontFamily: 'monospace',
-      fontSize: 12,
+      fontSize: 11,
       fill: 0xaaaacc,
       align: 'center',
     });
@@ -380,8 +394,8 @@ export default class LevelScene {
     this.noWeaponsOverlay.addChild(desc);
 
     // Go to Forge button
-    const forgeBtn = new Button('Go to Forge', 140, 38, this.soundManager);
-    forgeBtn.x = dungeonW / 2 - 150;
+    const forgeBtn = new Button('Go to Forge', 130, 36, this.soundManager);
+    forgeBtn.x = dungeonW / 2 - 140;
     forgeBtn.y = dungeonH / 2 + 50;
     forgeBtn.onClick(() => {
       this.sceneManager.switchTo('forge', { returnTo: 'level', levelIndex: this.gameState.currentLevel });
@@ -389,11 +403,9 @@ export default class LevelScene {
     this.noWeaponsOverlay.addChild(forgeBtn);
 
     // Back to Menu button
-    const dungeonW2 = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
-    const dungeonH2 = VIEWPORT_HEIGHT;
-    const backBtn = new Button('Back to Menu', 140, 38, this.soundManager);
-    backBtn.x = dungeonW2 / 2 + 10;
-    backBtn.y = dungeonH2 / 2 + 50;
+    const backBtn = new Button('Back to Menu', 130, 36, this.soundManager);
+    backBtn.x = dungeonW / 2 + 10;
+    backBtn.y = dungeonH / 2 + 50;
     backBtn.onClick(() => {
       this.sceneManager.switchTo('title');
     });
@@ -415,8 +427,8 @@ export default class LevelScene {
       this.soundManager.play('error');
     }
 
-    // Calculate dungeon area dimensions (excluding code panel)
-    const dungeonW = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+    // Calculate dungeon area dimensions (excluding code panel and inventory panel)
+    const dungeonW = VIEWPORT_WIDTH - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
     const dungeonH = VIEWPORT_HEIGHT;
 
     // Create error overlay
@@ -431,7 +443,7 @@ export default class LevelScene {
     overlay.addChild(bg);
 
     // Error panel
-    const panelW = 500;
+    const panelW = 450;
     const panelH = 220;
     const panel = new PIXI.Graphics();
     panel.beginFill(0x2a1a1a);
@@ -517,8 +529,8 @@ export default class LevelScene {
   }
 
   _hideWeaponUI() {
-    if (this.weaponSidebar) {
-      this.weaponSidebar.hide();
+    if (this.inventoryPanel) {
+      this.inventoryPanel.hide();
     }
     if (this.weaponSlots) {
       this.weaponSlots.visible = false;
@@ -531,8 +543,7 @@ export default class LevelScene {
 
   // --- Drag & Drop ---
 
-  _startDrag(weapon, e) {
-    // Cancel any existing drag
+  _startWeaponDrag(weapon, e) {
     this._cancelDrag();
 
     const texKey = SpriteManager.textureKeyForType(weapon.type);
@@ -549,7 +560,40 @@ export default class LevelScene {
     this.container.addChild(sprite);
 
     this.dragState = {
-      weaponId: weapon.id,
+      type: 'weapon',
+      id: weapon.id,
+      sprite,
+      active: true,
+    };
+  }
+
+  _startCrystalDrag(crystal, e) {
+    this._cancelDrag();
+
+    // Create a crystal drag sprite (text-based for now)
+    const sprite = new PIXI.Container();
+    const bg = new PIXI.Graphics();
+    bg.beginFill(crystal.color, 0.3);
+    bg.lineStyle(2, crystal.color);
+    bg.drawRoundedRect(-20, -16, 40, 32, 6);
+    bg.endFill();
+    sprite.addChild(bg);
+
+    const icon = new PIXI.Text('🔮', { fontFamily: 'sans-serif', fontSize: 20 });
+    icon.anchor.set(0.5);
+    sprite.addChild(icon);
+
+    sprite.alpha = 0.9;
+
+    const pos = e.data.getLocalPosition(this.container);
+    sprite.x = pos.x;
+    sprite.y = pos.y;
+
+    this.container.addChild(sprite);
+
+    this.dragState = {
+      type: 'crystal',
+      id: crystal.id,
       sprite,
       active: true,
     };
@@ -565,15 +609,20 @@ export default class LevelScene {
   _onPointerUp(e) {
     if (!this.dragState || !this.dragState.active) return;
 
-    // Get position in world coordinates (accounting for camera offset)
     const pos = e.data.getLocalPosition(this.worldContainer);
-    const slotIdx = this.weaponSlots.isOverSlot(pos.x, pos.y);
 
-    if (slotIdx >= 0) {
-      const weapon = this.weaponInventory.get(this.dragState.weaponId);
-      if (weapon) {
-        this.weaponSlots.dropWeapon(slotIdx, weapon);
+    if (this.dragState.type === 'weapon') {
+      // Check if dropped on weapon slot
+      const slotIdx = this.weaponSlots.isOverSlot(pos.x, pos.y);
+      if (slotIdx >= 0) {
+        const weapon = this.weaponInventory.get(this.dragState.id);
+        if (weapon) {
+          this.weaponSlots.dropWeapon(slotIdx, weapon);
+        }
       }
+    } else if (this.dragState.type === 'crystal') {
+      // Crystal drop handling - will be implemented when crystal slots are added
+      // For now, just cancel the drag
     }
 
     // Remove drag sprite

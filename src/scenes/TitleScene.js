@@ -4,11 +4,12 @@ import Button from '../ui/Button.js';
 import levels from '../levels/index.js';
 
 export default class TitleScene {
-  constructor(sceneManager, soundManager = null, progressManager = null, weaponInventory = null) {
+  constructor(sceneManager, soundManager = null, progressManager = null, weaponInventory = null, crystalInventory = null) {
     this.sceneManager = sceneManager;
     this.soundManager = soundManager;
     this.progressManager = progressManager;
     this.weaponInventory = weaponInventory;
+    this.crystalInventory = crystalInventory;
     this.container = new PIXI.Container();
   }
 
@@ -102,6 +103,25 @@ export default class TitleScene {
       this.container.addChild(btn);
     }
 
+    // Forge buttons row
+    const forgeY = startY + levels.length * 46 + 20;
+
+    const weaponForgeBtn = new Button('⚒ Weapon Forge', 150, 32, this.soundManager);
+    weaponForgeBtn.x = screenW / 2 - 160;
+    weaponForgeBtn.y = forgeY;
+    weaponForgeBtn.onClick(() => {
+      this.sceneManager.switchTo('forge');
+    });
+    this.container.addChild(weaponForgeBtn);
+
+    const crystalForgeBtn = new Button('🔮 Crystal Forge', 150, 32, this.soundManager);
+    crystalForgeBtn.x = screenW / 2 + 10;
+    crystalForgeBtn.y = forgeY;
+    crystalForgeBtn.onClick(() => {
+      this.sceneManager.switchTo('crystalForge');
+    });
+    this.container.addChild(crystalForgeBtn);
+
     // Instructions
     const instructions = new PIXI.Text(
       'Provide function inputs | Watch code paths light up',
@@ -162,7 +182,7 @@ export default class TitleScene {
     warningText.y = screenH / 2 - 40;
     overlay.addChild(warningText);
 
-    const descText = new PIXI.Text('This will erase all saved progress,\ntest runs, and forged weapons.', {
+    const descText = new PIXI.Text('This will erase all saved progress\nand test runs. Weapons and crystals\nwill be kept.', {
       fontFamily: 'monospace',
       fontSize: 12,
       fill: 0xaaaacc,
@@ -198,13 +218,14 @@ export default class TitleScene {
   }
 
   _resetAllData() {
-    // Clear all game-related localStorage keys EXCEPT weapons
+    // Clear all game-related localStorage keys EXCEPT weapons and crystals
     const keysToRemove = [];
+    const keysToKeep = ['dungeon-coverage-weapons', 'dungeon-coverage-crystals'];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && (key.startsWith('dungeon-coverage') || key.startsWith('dc-'))) {
-        // Keep weapons - only reset level progress
-        if (key !== 'dungeon-coverage-weapons') {
+        // Keep weapons and crystals - only reset level progress
+        if (!keysToKeep.includes(key)) {
           keysToRemove.push(key);
         }
       }

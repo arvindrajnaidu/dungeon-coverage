@@ -6,6 +6,7 @@ export const VIEWPORT_HEIGHT = 800;
 
 // Split screen layout
 export const CODE_PANEL_WIDTH = 380;
+export const INVENTORY_PANEL_WIDTH = 180;
 export const DUNGEON_AREA_X = CODE_PANEL_WIDTH;
 
 export const COLORS = {

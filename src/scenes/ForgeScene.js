@@ -35,10 +35,22 @@ export default class ForgeScene {
   }
 
   _removeOverlay() {
+    if (this._escapeHandler) {
+      document.removeEventListener('keydown', this._escapeHandler);
+      this._escapeHandler = null;
+    }
     if (this.overlay && this.overlay.parentNode) {
       this.overlay.parentNode.removeChild(this.overlay);
     }
     this.overlay = null;
+  }
+
+  _closeModal() {
+    if (this.returnData && this.returnData.returnTo === 'level') {
+      this.sceneManager.switchTo('level', { levelIndex: this.returnData.levelIndex, _replay: true });
+    } else {
+      this.sceneManager.switchTo('title');
+    }
   }
 
   _createOverlay() {
@@ -53,13 +65,41 @@ export default class ForgeScene {
       z-index: 1000; font-family: monospace;
     `;
 
+    // Click outside panel to close
+    overlay.addEventListener('click', () => this._closeModal());
+
+    // Escape key to close
+    this._escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        this._closeModal();
+      }
+    };
+    document.addEventListener('keydown', this._escapeHandler);
+
     const panel = document.createElement('div');
     panel.style.cssText = `
       background: #0f3460; border: 2px solid #533483; border-radius: 12px;
       padding: 24px 32px; width: 800px; max-height: 85vh;
       color: #e0e0e0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      display: flex; flex-direction: column;
+      display: flex; flex-direction: column; position: relative;
     `;
+
+    // Prevent clicks on panel from closing the modal
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    // Close button (X) in top right
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.style.cssText = `
+      position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+      background: transparent; border: 1px solid #553355; border-radius: 6px;
+      color: #aa88aa; font-size: 24px; line-height: 28px; cursor: pointer;
+      font-family: sans-serif;
+    `;
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.borderColor = '#7a4aaa'; closeBtn.style.color = '#fff'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.borderColor = '#553355'; closeBtn.style.color = '#aa88aa'; });
+    closeBtn.addEventListener('click', () => this._closeModal());
+    panel.appendChild(closeBtn);
 
     // Title
     const title = document.createElement('h2');
@@ -262,29 +302,6 @@ export default class ForgeScene {
       invList,
     };
     panel.appendChild(content);
-
-    // Bottom: Back button
-    const bottomRow = document.createElement('div');
-    bottomRow.style.cssText = 'text-align: center; margin-top: 20px;';
-
-    const backBtn = document.createElement('button');
-    backBtn.textContent = this.returnData ? 'Back to Level' : 'Back to Menu';
-    backBtn.style.cssText = `
-      padding: 8px 28px; background: transparent; border: 1px solid #533483;
-      border-radius: 6px; color: #aaaacc; font-family: monospace; font-size: 13px;
-      cursor: pointer;
-    `;
-    backBtn.addEventListener('mouseenter', () => { backBtn.style.borderColor = '#7a4aaa'; backBtn.style.color = '#fff'; });
-    backBtn.addEventListener('mouseleave', () => { backBtn.style.borderColor = '#533483'; backBtn.style.color = '#aaaacc'; });
-    backBtn.addEventListener('click', () => {
-      if (this.returnData && this.returnData.returnTo === 'level') {
-        this.sceneManager.switchTo('level', { levelIndex: this.returnData.levelIndex, _replay: true });
-      } else {
-        this.sceneManager.switchTo('title');
-      }
-    });
-    bottomRow.appendChild(backBtn);
-    panel.appendChild(bottomRow);
 
     overlay.appendChild(panel);
     document.body.appendChild(overlay);

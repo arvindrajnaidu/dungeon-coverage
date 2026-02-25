@@ -7,7 +7,9 @@ import LevelScene from './scenes/LevelScene.js';
 import ResultScene from './scenes/ResultScene.js';
 import VictoryScene from './scenes/VictoryScene.js';
 import ForgeScene from './scenes/ForgeScene.js';
+import CrystalForgeScene from './scenes/CrystalForgeScene.js';
 import WeaponInventory from './game/WeaponInventory.js';
+import CrystalInventory from './game/CrystalInventory.js';
 import ProgressManager from './game/ProgressManager.js';
 
 async function init() {
@@ -29,24 +31,27 @@ async function init() {
     // Create scene manager
     const sceneManager = new SceneManager(gameApp);
 
-    // Create shared weapon inventory
+    // Create shared inventories
     const weaponInventory = new WeaponInventory();
+    const crystalInventory = new CrystalInventory();
 
     // Create progress manager for saving/loading game progress
     const progressManager = new ProgressManager();
 
     // Register scenes
-    const titleScene = new TitleScene(sceneManager, soundManager, progressManager, weaponInventory);
-    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, soundManager, progressManager);
+    const titleScene = new TitleScene(sceneManager, soundManager, progressManager, weaponInventory, crystalInventory);
+    const levelScene = new LevelScene(sceneManager, spriteManager, weaponInventory, crystalInventory, soundManager, progressManager);
     const resultScene = new ResultScene(sceneManager, soundManager, progressManager);
     const victoryScene = new VictoryScene(sceneManager, soundManager);
     const forgeScene = new ForgeScene(sceneManager, weaponInventory, soundManager);
+    const crystalForgeScene = new CrystalForgeScene(sceneManager, crystalInventory, soundManager);
 
     sceneManager.register('title', titleScene);
     sceneManager.register('level', levelScene);
     sceneManager.register('result', resultScene);
     sceneManager.register('victory', victoryScene);
     sceneManager.register('forge', forgeScene);
+    sceneManager.register('crystalForge', crystalForgeScene);
 
     // Game loop
     gameApp.onUpdate((delta) => {

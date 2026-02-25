@@ -1,10 +1,10 @@
 import * as PIXI from 'pixi.js';
-import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH } from '../constants.js';
+import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, INVENTORY_PANEL_WIDTH } from '../constants.js';
 import Panel from './Panel.js';
 import Button from './Button.js';
 
-// Dungeon area dimensions (excluding code panel)
-const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH;
+// Dungeon area dimensions (excluding code panel and inventory panel)
+const DUNGEON_WIDTH = VIEWPORT_WIDTH - CODE_PANEL_WIDTH - INVENTORY_PANEL_WIDTH;
 const DUNGEON_HEIGHT = VIEWPORT_HEIGHT;
 
 export default class TestModal {
