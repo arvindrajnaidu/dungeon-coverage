@@ -3,6 +3,7 @@ dist/
 .playwright-mcp/
 *.png
 !public/sprites/**/*.png
+!public/favicon.png
 .DS_Store
 __MACOSX/
 public/sounds/.DS_Store
