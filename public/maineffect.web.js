@@ -1,1 +1,0 @@
-/Users/arvindnaidu/myws/maineffect/dist/maineffect.web.js
