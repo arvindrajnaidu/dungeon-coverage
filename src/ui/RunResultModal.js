@@ -1,8 +1,4 @@
 import * as PIXI from 'pixi.js';
-import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, CODE_PANEL_WIDTH, INVENTORY_PANEL_WIDTH } from '../constants.js';
-import Panel from './Panel.js';
-import Button from './Button.js';
-import ProgressBar from './ProgressBar.js';
 
 export default class RunResultModal extends PIXI.Container {
   constructor(soundManager = null) {
@@ -10,6 +6,8 @@ export default class RunResultModal extends PIXI.Container {
     this.soundManager = soundManager;
     this.visible = false;
     this._onContinue = null;
+    this._onSaveTest = null;
+    this._overlay = null;
   }
 
   show(options = {}) {
@@ -19,181 +17,154 @@ export default class RunResultModal extends PIXI.Container {
       branchCoverage = 0,
       runNumber = 1,
       isLevelComplete = false,
-      dungeonWidth = 800,
-      dungeonHeight = 600,
     } = options;
 
-    this.removeChildren();
+    this.hide();
     this.visible = true;
 
-    // Semi-transparent overlay (covers dungeon area only)
-    const overlay = new PIXI.Graphics();
-    overlay.beginFill(0x000000, 0.75);
-    overlay.drawRect(0, 0, dungeonWidth, dungeonHeight);
-    overlay.endFill();
-    overlay.eventMode = 'static'; // Block clicks
-    this.addChild(overlay);
+    // Build the entire modal as a DOM overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'run-result-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; font-family: monospace;
+    `;
 
-    // Calculate panel height based on snapshot content
-    const hasSnapshot = executionSnapshot !== null;
-    const panelW = 420;
-    const panelH = hasSnapshot ? 380 : 260;
-    const panel = new Panel(panelW, panelH);
-    panel.x = (dungeonWidth - panelW) / 2;
-    panel.y = (dungeonHeight - panelH) / 2;
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      background: #0f1a2e; border: 2px solid #334466; border-radius: 12px;
+      padding: 28px 32px; width: 500px;
+      color: #e0e0e0; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    `;
 
-    // Title based on whether level is complete or just a run
+    // Title
+    const titleColor = isLevelComplete ? '#44ff44' : '#44aaff';
     const titleText = isLevelComplete ? 'LEVEL COMPLETE!' : 'RUN COMPLETE';
-    const titleColor = isLevelComplete ? 0x44ff44 : 0x44aaff;
-
-    const title = new PIXI.Text(titleText, {
-      fontFamily: 'monospace',
-      fontSize: 22,
-      fontWeight: 'bold',
-      fill: titleColor,
-      align: 'center',
-    });
-    title.anchor.set(0.5, 0);
-    title.x = panelW / 2;
-    title.y = 16;
-    panel.addChild(title);
+    const title = document.createElement('div');
+    title.textContent = titleText;
+    title.style.cssText = `
+      text-align: center; font-size: 20px; font-weight: bold;
+      color: ${titleColor}; margin-bottom: 4px;
+    `;
+    panel.appendChild(title);
 
     // Run number
-    const runText = new PIXI.Text(`Run #${runNumber}`, {
-      fontFamily: 'monospace',
-      fontSize: 12,
-      fill: 0x888899,
-    });
-    runText.anchor.set(0.5, 0);
-    runText.x = panelW / 2;
-    runText.y = 44;
-    panel.addChild(runText);
+    const runLabel = document.createElement('div');
+    runLabel.textContent = `Run #${runNumber}`;
+    runLabel.style.cssText = `
+      text-align: center; font-size: 12px; color: #888899; margin-bottom: 16px;
+    `;
+    panel.appendChild(runLabel);
 
-    let yOffset = 70;
-
-    // Execution snapshot section
-    if (hasSnapshot) {
-      const snapshotBg = new PIXI.Graphics();
-      snapshotBg.beginFill(0x1a2a3a, 0.9);
-      snapshotBg.lineStyle(2, 0x4488cc);
-      snapshotBg.drawRoundedRect(20, yOffset, panelW - 40, 130, 8);
-      snapshotBg.endFill();
-      panel.addChild(snapshotBg);
-
-      // Snapshot title
-      const snapshotTitle = new PIXI.Text('📸 Execution Snapshot', {
-        fontFamily: 'monospace',
-        fontSize: 13,
-        fontWeight: 'bold',
-        fill: 0x66aaff,
-      });
-      snapshotTitle.x = 30;
-      snapshotTitle.y = yOffset + 8;
-      panel.addChild(snapshotTitle);
-
-      // Build snapshot JSON preview
+    // Snapshot section
+    if (executionSnapshot) {
       const snapshotData = {
         result: executionSnapshot.result,
         error: executionSnapshot.error ? String(executionSnapshot.error) : null,
         stubs: executionSnapshot.stubDump || {},
       };
 
-      // Format as compact JSON for display
-      let snapshotJson = JSON.stringify(snapshotData, null, 1);
-      // Truncate if too long
-      if (snapshotJson.length > 180) {
-        snapshotJson = snapshotJson.substring(0, 177) + '...';
+      let snapshotJson;
+      try {
+        snapshotJson = JSON.stringify(snapshotData, null, 2);
+      } catch (e) {
+        snapshotJson = `{ "error": "Could not serialize: ${e.message}" }`;
       }
 
-      const snapshotText = new PIXI.Text(snapshotJson, {
-        fontFamily: 'monospace',
-        fontSize: 9,
-        fill: 0xaaccee,
-        wordWrap: true,
-        wordWrapWidth: panelW - 60,
-      });
-      snapshotText.x = 30;
-      snapshotText.y = yOffset + 28;
-      panel.addChild(snapshotText);
+      const snapshotSection = document.createElement('div');
+      snapshotSection.style.cssText = `
+        margin-bottom: 16px; border: 1px solid #4488cc; border-radius: 8px;
+        padding: 10px; background: #1a2a3a;
+      `;
 
-      // Save as Snapshot button (placeholder for now)
-      const saveBtn = new Button('Save Snapshot', 120, 28, this.soundManager);
-      saveBtn.x = panelW - 150;
-      saveBtn.y = yOffset + 95;
-      saveBtn.onClick(() => {
-        console.log('%c[Snapshot] Saving snapshot:', 'color: #66aaff;', snapshotData);
-        // TODO: Implement snapshot saving
-        alert('Snapshot saved! (To be implemented)');
-      });
-      panel.addChild(saveBtn);
+      const snapshotTitle = document.createElement('div');
+      snapshotTitle.textContent = 'Execution Snapshot';
+      snapshotTitle.style.cssText = `
+        font-size: 13px; font-weight: bold; color: #66aaff; margin-bottom: 8px;
+      `;
+      snapshotSection.appendChild(snapshotTitle);
 
-      yOffset += 145;
+      const textarea = document.createElement('textarea');
+      textarea.readOnly = true;
+      textarea.spellcheck = false;
+      textarea.style.cssText = `
+        width: 100%; height: 160px; box-sizing: border-box;
+        font-family: monospace; font-size: 11px; color: #aaccee;
+        background: #0d1b2a; border: 1px solid #334466; border-radius: 4px;
+        outline: none; resize: vertical; padding: 8px; line-height: 1.4;
+      `;
+      snapshotSection.appendChild(textarea);
+      // Set value after adding to DOM
+      requestAnimationFrame(() => { textarea.value = snapshotJson || '{}'; });
+
+      panel.appendChild(snapshotSection);
     }
 
     // Coverage section
-    const coverageTitle = new PIXI.Text('Coverage Progress', {
-      fontFamily: 'monospace',
-      fontSize: 13,
-      fontWeight: 'bold',
-      fill: 0xccccee,
-    });
-    coverageTitle.anchor.set(0.5, 0);
-    coverageTitle.x = panelW / 2;
-    coverageTitle.y = yOffset;
-    panel.addChild(coverageTitle);
+    const coverageSection = document.createElement('div');
+    coverageSection.style.cssText = 'margin-bottom: 16px;';
 
-    yOffset += 22;
+    const coverageTitle = document.createElement('div');
+    coverageTitle.textContent = 'Coverage Progress';
+    coverageTitle.style.cssText = `
+      text-align: center; font-size: 13px; font-weight: bold;
+      color: #ccccee; margin-bottom: 10px;
+    `;
+    coverageSection.appendChild(coverageTitle);
 
-    // Statement coverage
-    const stmtLabel = new PIXI.Text(`Statements: ${Math.round(stmtCoverage)}%`, {
-      fontFamily: 'monospace',
-      fontSize: 11,
-      fill: 0xaaaacc,
-    });
-    stmtLabel.x = 30;
-    stmtLabel.y = yOffset;
-    panel.addChild(stmtLabel);
+    coverageSection.appendChild(this._createBarRow('Statements', stmtCoverage));
+    coverageSection.appendChild(this._createBarRow('Branches', branchCoverage));
 
-    const stmtBar = new ProgressBar(panelW - 60, 14);
-    stmtBar.x = 30;
-    stmtBar.y = yOffset + 18;
-    stmtBar.setProgress(stmtCoverage / 100);
-    panel.addChild(stmtBar);
+    panel.appendChild(coverageSection);
 
-    yOffset += 40;
-
-    // Branch coverage
-    const branchLabel = new PIXI.Text(`Branches: ${Math.round(branchCoverage)}%`, {
-      fontFamily: 'monospace',
-      fontSize: 11,
-      fill: 0xaaaacc,
-    });
-    branchLabel.x = 30;
-    branchLabel.y = yOffset;
-    panel.addChild(branchLabel);
-
-    const branchBar = new ProgressBar(panelW - 60, 14);
-    branchBar.x = 30;
-    branchBar.y = yOffset + 18;
-    branchBar.setProgress(branchCoverage / 100);
-    panel.addChild(branchBar);
-
-    yOffset += 50;
+    // Save as Test button
+    if (executionSnapshot) {
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Save as Test';
+      saveBtn.style.cssText = `
+        display: block; width: 100%; padding: 10px; margin-bottom: 8px;
+        border: none; border-radius: 6px;
+        background: #2a7a44; color: #fff; font-family: monospace;
+        font-size: 14px; font-weight: bold; cursor: pointer; letter-spacing: 1px;
+      `;
+      saveBtn.addEventListener('mouseenter', () => { if (!saveBtn.disabled) saveBtn.style.background = '#33995533'; });
+      saveBtn.addEventListener('mouseleave', () => { if (!saveBtn.disabled) saveBtn.style.background = '#2a7a44'; });
+      saveBtn.addEventListener('click', () => {
+        if (this._onSaveTest) {
+          this._onSaveTest();
+          saveBtn.textContent = 'Saved!';
+          saveBtn.style.background = '#1a5530';
+          saveBtn.disabled = true;
+          saveBtn.style.cursor = 'default';
+        }
+      });
+      panel.appendChild(saveBtn);
+    }
 
     // Continue button
     const btnText = isLevelComplete ? 'Continue' : 'Next Run';
-    const continueBtn = new Button(btnText, panelW - 60, 36, this.soundManager);
-    continueBtn.x = 30;
-    continueBtn.y = yOffset;
-    continueBtn.onClick(() => {
+    const btn = document.createElement('button');
+    btn.textContent = btnText;
+    btn.style.cssText = `
+      display: block; width: 100%; padding: 10px; border: none; border-radius: 6px;
+      background: #335588; color: #fff; font-family: monospace;
+      font-size: 14px; font-weight: bold; cursor: pointer; letter-spacing: 1px;
+    `;
+    btn.addEventListener('mouseenter', () => { btn.style.background = '#4477aa'; });
+    btn.addEventListener('mouseleave', () => { btn.style.background = '#335588'; });
+    btn.addEventListener('click', () => {
       this.hide();
       if (this._onContinue) {
         this._onContinue(isLevelComplete);
       }
     });
-    panel.addChild(continueBtn);
+    panel.appendChild(btn);
 
-    this.addChild(panel);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    this._overlay = overlay;
 
     // Play sound
     if (this.soundManager) {
@@ -207,21 +178,45 @@ export default class RunResultModal extends PIXI.Container {
 
   hide() {
     this.visible = false;
-    this.removeChildren();
+    if (this._overlay) {
+      this._overlay.remove();
+      this._overlay = null;
+    }
   }
 
   onContinue(callback) {
     this._onContinue = callback;
   }
 
-  _formatValue(value) {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
-    if (typeof value === 'string') return `"${value}"`;
-    if (typeof value === 'number') return String(value);
-    if (typeof value === 'boolean') return String(value);
-    if (Array.isArray(value)) return JSON.stringify(value);
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
+  onSaveTest(callback) {
+    this._onSaveTest = callback;
+  }
+
+  _createBarRow(label, percent) {
+    const row = document.createElement('div');
+    row.style.cssText = 'margin-bottom: 8px;';
+
+    const text = document.createElement('div');
+    text.textContent = `${label}: ${Math.round(percent)}%`;
+    text.style.cssText = 'font-size: 11px; color: #aaaacc; margin-bottom: 4px;';
+    row.appendChild(text);
+
+    const barBg = document.createElement('div');
+    barBg.style.cssText = `
+      width: 100%; height: 14px; background: #1a1a2e;
+      border-radius: 7px; overflow: hidden;
+    `;
+
+    const barFill = document.createElement('div');
+    const clamped = Math.max(0, Math.min(100, percent));
+    const color = clamped >= 80 ? '#44ff44' : clamped >= 50 ? '#ffaa44' : '#ff4444';
+    barFill.style.cssText = `
+      width: ${clamped}%; height: 100%; background: ${color};
+      border-radius: 7px; transition: width 0.3s ease;
+    `;
+    barBg.appendChild(barFill);
+    row.appendChild(barBg);
+
+    return row;
   }
 }

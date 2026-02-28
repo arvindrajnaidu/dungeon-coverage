@@ -279,6 +279,23 @@ export default class LevelScene {
 
     // Run result modal
     this.runResultModal = new RunResultModal(this.soundManager);
+    this.runResultModal.onSaveTest(() => {
+      if (!this._currentRunInputs) return;
+      const description = this._describeInputs(this._currentRunInputs);
+      const testCase = {
+        description,
+        inputs: this._currentRunInputs,
+      };
+      if (this.progressManager) {
+        this.progressManager.addTest(this.gameState.currentLevel, testCase);
+      }
+      // Refresh testRuns from storage so it reflects only saved tests
+      this.testRuns = this.progressManager
+        ? this.progressManager.getLevelTests(this.gameState.currentLevel)
+        : [];
+      // Clear so the same run can't be saved twice
+      this._currentRunInputs = null;
+    });
     this.runResultModal.onContinue((isLevelComplete) => {
       if (isLevelComplete) {
         this.sceneManager.switchTo('result', {
@@ -1005,21 +1022,6 @@ export default class LevelScene {
     this._highlightCoveredLines();
 
     const isComplete = this.coverageTracker.isFullCoverage();
-
-    // Save the test case (inputs only - coverage is computed by replaying tests)
-    if (this._currentRunInputs) {
-      const description = this._describeInputs(this._currentRunInputs);
-      const testCase = {
-        description,
-        inputs: this._currentRunInputs,
-      };
-      this.testRuns.push(testCase);
-
-      // Save test to localStorage
-      if (this.progressManager) {
-        this.progressManager.addTest(this.gameState.currentLevel, testCase);
-      }
-    }
 
     // Mark level complete if 100% coverage
     if (isComplete && this.progressManager) {

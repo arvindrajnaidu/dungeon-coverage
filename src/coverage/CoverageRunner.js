@@ -55,9 +55,10 @@ function createMockFn() {
   };
   fn.calls = calls;
   fn._returnValue = undefined;
-  fn.mockReturnValue = (val) => { fn._returnValue = val; return fn; };
-  fn.mockResolvedValue = (val) => { fn._returnValue = Promise.resolve(val); return fn; };
-  fn.mockRejectedValue = (val) => { fn._returnValue = Promise.reject(val); return fn; };
+  fn._configuredValue = undefined;
+  fn.mockReturnValue = (val) => { fn._returnValue = val; fn._configuredValue = val; return fn; };
+  fn.mockResolvedValue = (val) => { fn._returnValue = Promise.resolve(val); fn._configuredValue = val; return fn; };
+  fn.mockRejectedValue = (val) => { fn._returnValue = Promise.reject(val); fn._configuredValue = val; return fn; };
   return fn;
 }
 
@@ -205,10 +206,20 @@ export default class CoverageRunner {
             }
           }
 
-          // Capture stub states via dump method (even on errors)
-          const getStubDump = () => stubsInstance && typeof stubsInstance.dump === 'function'
-            ? stubsInstance.dump()
-            : null;
+          // Capture stub states from maineffect Stubs
+          const getStubDump = () => {
+            if (!stubsInstance || typeof stubsInstance.getStubs !== 'function') return null;
+            const allStubs = stubsInstance.getStubs();
+            const dump = {};
+            for (const [name, stub] of Object.entries(allStubs)) {
+              dump[name] = {
+                callCount: stub.calls ? stub.calls.length : 0,
+                calls: stub.calls || [],
+                returnValue: stub._configuredValue,
+              };
+            }
+            return Object.keys(dump).length > 0 ? dump : null;
+          };
 
           // Check if maineffect returned an Error instance
           if (result instanceof Error) {
@@ -262,10 +273,8 @@ export default class CoverageRunner {
             return { result: null, coverageData, error: result.__error, stubDump: getStubDump() };
           }
 
-          // Capture stub states via dump method
-          const stubDump = stubsInstance && typeof stubsInstance.dump === 'function'
-            ? stubsInstance.dump()
-            : null;
+          // Capture stub states from maineffect Stubs
+          const stubDump = getStubDump();
 
           if (!quiet) {
             console.log('%c--- Function completed ---', 'color: #44ff44;');
@@ -279,9 +288,7 @@ export default class CoverageRunner {
           return { result, coverageData, error: null, stubDump };
         } catch (e) {
           const coverageData = this._extractCoverage();
-          const stubDump = stubsInstance && typeof stubsInstance.dump === 'function'
-            ? stubsInstance.dump()
-            : null;
+          const stubDump = getStubDump();
 
           if (!quiet) {
             console.log('%c--- Function threw error ---', 'color: #ff4444;');
