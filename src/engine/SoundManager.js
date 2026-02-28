@@ -3,18 +3,19 @@ import { Howl, Howler } from 'howler';
 const STORAGE_KEY = 'dungeon-coverage-muted';
 
 // Sound file paths - using existing Effects library
+const BASE = import.meta.env.BASE_URL;
 const SOUNDS = {
-  footstep: '/sounds/Effects/Movement/Footsteps/sfx_movement_footsteps1a.wav',
-  gemCollect: '/sounds/Effects/General Sounds/Coins/sfx_coin_single1.wav',
-  buttonHover: '/sounds/Effects/General Sounds/Menu Sounds/sfx_menu_move1.wav',
-  buttonClick: '/sounds/Effects/General Sounds/Buttons/sfx_sounds_button1.wav',
-  forgeCreate: '/sounds/Effects/General Sounds/Positive Sounds/sfx_sounds_powerup1.wav',
-  weaponDrop: '/sounds/Effects/General Sounds/Interactions/sfx_sounds_interaction5.wav',
-  runStart: '/sounds/Effects/General Sounds/Positive Sounds/sfx_sounds_powerup4.wav',
-  levelComplete: '/sounds/Effects/General Sounds/Fanfares/sfx_sounds_fanfare1.wav',
-  victory: '/sounds/Effects/General Sounds/Fanfares/sfx_sounds_fanfare3.wav',
-  sceneTransition: '/sounds/Effects/Movement/Portals and Transitions/sfx_movement_portal1.wav',
-  error: '/sounds/Effects/General Sounds/Negative Sounds/sfx_sounds_error1.wav',
+  footstep: `${BASE}sounds/Effects/Movement/Footsteps/sfx_movement_footsteps1a.wav`,
+  gemCollect: `${BASE}sounds/Effects/General Sounds/Coins/sfx_coin_single1.wav`,
+  buttonHover: `${BASE}sounds/Effects/General Sounds/Menu Sounds/sfx_menu_move1.wav`,
+  buttonClick: `${BASE}sounds/Effects/General Sounds/Buttons/sfx_sounds_button1.wav`,
+  forgeCreate: `${BASE}sounds/Effects/General Sounds/Positive Sounds/sfx_sounds_powerup1.wav`,
+  weaponDrop: `${BASE}sounds/Effects/General Sounds/Interactions/sfx_sounds_interaction5.wav`,
+  runStart: `${BASE}sounds/Effects/General Sounds/Positive Sounds/sfx_sounds_powerup4.wav`,
+  levelComplete: `${BASE}sounds/Effects/General Sounds/Fanfares/sfx_sounds_fanfare1.wav`,
+  victory: `${BASE}sounds/Effects/General Sounds/Fanfares/sfx_sounds_fanfare3.wav`,
+  sceneTransition: `${BASE}sounds/Effects/Movement/Portals and Transitions/sfx_movement_portal1.wav`,
+  error: `${BASE}sounds/Effects/General Sounds/Negative Sounds/sfx_sounds_error1.wav`,
 };
 
 export default class SoundManager {

@@ -1,7 +1,8 @@
 import * as PIXI from 'pixi.js';
 import { TILE_SIZE, COLORS } from '../constants.js';
 
-const TILESET_PATH = '/sprites/0x72_DungeonTilesetII_v1.7/0x72_DungeonTilesetII_v1.7.png';
+const BASE = import.meta.env.BASE_URL;
+const TILESET_PATH = `${BASE}sprites/0x72_DungeonTilesetII_v1.7/0x72_DungeonTilesetII_v1.7.png`;
 
 export default class SpriteManager {
   constructor() {
