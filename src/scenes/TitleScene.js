@@ -46,17 +46,30 @@ export default class TitleScene {
     title.y = 100;
     this.container.addChild(title);
 
-    // Subtitle
-    const subtitle = new PIXI.Text('The Javascript unit testing game.', {
-      fontFamily: 'monospace',
-      fontSize: 13,
-      fill: 0xaaaacc,
-      align: 'center',
+    // Subtitle with link
+    const prefix = 'A Javascript unit testing game powered by ';
+    const linkText = 'maineffectjs';
+    const subtitleText = new PIXI.Text(prefix, {
+      fontFamily: 'monospace', fontSize: 13, fill: 0xaaaacc,
     });
-    subtitle.anchor.set(0.5);
-    subtitle.x = screenW / 2;
-    subtitle.y = 170;
-    this.container.addChild(subtitle);
+    const subtitleLink = new PIXI.Text(linkText, {
+      fontFamily: 'monospace', fontSize: 13, fill: 0x4488cc,
+    });
+    const totalWidth = subtitleText.width + subtitleLink.width;
+    subtitleText.x = (screenW - totalWidth) / 2;
+    subtitleText.y = 163;
+    this.container.addChild(subtitleText);
+
+    subtitleLink.x = subtitleText.x + subtitleText.width;
+    subtitleLink.y = 163;
+    subtitleLink.eventMode = 'static';
+    subtitleLink.cursor = 'pointer';
+    subtitleLink.on('pointerover', () => { subtitleLink.style.fill = 0x66bbff; });
+    subtitleLink.on('pointerout', () => { subtitleLink.style.fill = 0x4488cc; });
+    subtitleLink.on('pointertap', () => {
+      window.open('https://github.com/arvindrajnaidu/maineffect', '_blank');
+    });
+    this.container.addChild(subtitleLink);
 
     // Mobile warning
     if (isMobile) {
@@ -103,25 +116,6 @@ export default class TitleScene {
       this.container.addChild(btn);
     }
 
-    // Forge buttons row
-    const forgeY = startY + levels.length * 46 + 20;
-
-    const weaponForgeBtn = new Button('⚒ Weapon Forge', 150, 32, this.soundManager);
-    weaponForgeBtn.x = screenW / 2 - 160;
-    weaponForgeBtn.y = forgeY;
-    weaponForgeBtn.onClick(() => {
-      this.sceneManager.switchTo('forge');
-    });
-    this.container.addChild(weaponForgeBtn);
-
-    const crystalForgeBtn = new Button('🔮 Crystal Forge', 150, 32, this.soundManager);
-    crystalForgeBtn.x = screenW / 2 + 10;
-    crystalForgeBtn.y = forgeY;
-    crystalForgeBtn.onClick(() => {
-      this.sceneManager.switchTo('crystalForge');
-    });
-    this.container.addChild(crystalForgeBtn);
-
     // Instructions
     const instructions = new PIXI.Text(
       'Provide function inputs | Watch code paths light up',
@@ -137,14 +131,26 @@ export default class TitleScene {
     instructions.y = screenH - 50;
     this.container.addChild(instructions);
 
-    // Reset button
+    // Bottom buttons
+    const btnGap = 12;
     const resetBtn = new Button('Reset Progress', 140, 28, this.soundManager);
-    resetBtn.x = (screenW - 140) / 2;
+    const aboutBtn = new Button('About', 80, 28, this.soundManager);
+    const totalBtnWidth = 140 + btnGap + 80;
+    const btnStartX = (screenW - totalBtnWidth) / 2;
+
+    resetBtn.x = btnStartX;
     resetBtn.y = screenH - 24;
     resetBtn.onClick(() => {
       this._showResetConfirmation(screenW, screenH);
     });
     this.container.addChild(resetBtn);
+
+    aboutBtn.x = btnStartX + 140 + btnGap;
+    aboutBtn.y = screenH - 24;
+    aboutBtn.onClick(() => {
+      this._showAbout(screenW, screenH);
+    });
+    this.container.addChild(aboutBtn);
   }
 
   _showResetConfirmation(screenW, screenH) {
@@ -241,6 +247,67 @@ export default class TitleScene {
     if (this.soundManager) {
       this.soundManager.play('sceneTransition');
     }
+  }
+
+  _showAbout(screenW, screenH) {
+    const overlay = new PIXI.Container();
+
+    const dimBg = new PIXI.Graphics();
+    dimBg.beginFill(0x000000, 0.85);
+    dimBg.drawRect(0, 0, screenW, screenH);
+    dimBg.endFill();
+    dimBg.eventMode = 'static';
+    overlay.addChild(dimBg);
+
+    const panelW = 400;
+    const panelH = 240;
+    const panel = new PIXI.Graphics();
+    panel.beginFill(0x1a1a3e);
+    panel.lineStyle(2, 0x4488cc);
+    panel.drawRoundedRect((screenW - panelW) / 2, (screenH - panelH) / 2, panelW, panelH, 8);
+    panel.endFill();
+    overlay.addChild(panel);
+
+    const titleText = new PIXI.Text('About', {
+      fontFamily: 'monospace', fontSize: 18, fontWeight: 'bold', fill: 0x44aaff, align: 'center',
+    });
+    titleText.anchor.set(0.5);
+    titleText.x = screenW / 2;
+    titleText.y = screenH / 2 - 85;
+    overlay.addChild(titleText);
+
+    const credits = [
+      { text: 'Dungeon Tileset II v1.7', color: 0xeeddaa },
+      { text: 'by 0x72', color: 0xaaaacc },
+      { text: '' },
+      { text: 'Sound Effects Collection (CC0)', color: 0xeeddaa },
+      { text: 'by Juhani Junkala', color: 0xaaaacc },
+      { text: '' },
+      { text: 'Built with PIXI.js and Howler.js', color: 0x888899 },
+    ];
+
+    let cy = screenH / 2 - 55;
+    for (const line of credits) {
+      if (!line.text) { cy += 8; continue; }
+      const t = new PIXI.Text(line.text, {
+        fontFamily: 'monospace', fontSize: 12, fill: line.color || 0xaaaacc, align: 'center',
+      });
+      t.anchor.set(0.5);
+      t.x = screenW / 2;
+      t.y = cy;
+      overlay.addChild(t);
+      cy += 18;
+    }
+
+    const closeBtn = new Button('Close', 80, 28, this.soundManager);
+    closeBtn.x = (screenW - 80) / 2;
+    closeBtn.y = screenH / 2 + panelH / 2 - 45;
+    closeBtn.onClick(() => {
+      this.container.removeChild(overlay);
+    });
+    overlay.addChild(closeBtn);
+
+    this.container.addChild(overlay);
   }
 
   exit() {}

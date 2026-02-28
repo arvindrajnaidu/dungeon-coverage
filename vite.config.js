@@ -74,6 +74,7 @@ function babelExternals() {
 }
 
 export default defineConfig({
+  base: process.env.GITHUB_PAGES ? '/dungeon-coverage/' : '/',
   plugins: [processPolyfill(), babelExternals()],
   define: {
     'process.env.NODE_ENV': JSON.stringify('development'),

@@ -95,7 +95,7 @@ export default class WeaponSlots extends PIXI.Container {
         slot.typeLabel = typeLabel;
       }
 
-      // Parameter name label (centered in slot)
+      // Parameter name label (centered in slot, upper area)
       const label = new PIXI.Text(hint.name, {
         fontFamily: 'monospace',
         fontSize: 11,
@@ -104,9 +104,22 @@ export default class WeaponSlots extends PIXI.Container {
       });
       label.anchor.set(0.5);
       label.x = slotX + SLOT_W / 2;
-      label.y = this.slotOffsetY + SLOT_H / 2;
+      label.y = this.slotOffsetY + SLOT_H / 2 - 7;
       this.addChild(label);
       slot.label = label;
+
+      // Hint label (below param name)
+      const hintLabel = new PIXI.Text('drag weapon here', {
+        fontFamily: 'monospace',
+        fontSize: 8,
+        fill: 0x667788,
+        align: 'center',
+      });
+      hintLabel.anchor.set(0.5);
+      hintLabel.x = slotX + SLOT_W / 2;
+      hintLabel.y = this.slotOffsetY + SLOT_H / 2 + 8;
+      this.addChild(hintLabel);
+      slot.hintLabel = hintLabel;
 
       this.slots.push(slot);
     }
@@ -238,8 +251,9 @@ export default class WeaponSlots extends PIXI.Container {
       this.soundManager.play('weaponDrop');
     }
 
-    // Hide placeholder label and type label
+    // Hide placeholder label, hint, and type label
     slot.label.visible = false;
+    if (slot.hintLabel) slot.hintLabel.visible = false;
     if (slot.typeLabel) slot.typeLabel.visible = false;
 
     // Draw filled bg
@@ -278,6 +292,7 @@ export default class WeaponSlots extends PIXI.Container {
     this._clearSlotDisplay(slot);
     slot.weapon = null;
     slot.label.visible = true;
+    if (slot.hintLabel) slot.hintLabel.visible = true;
     if (slot.typeLabel) slot.typeLabel.visible = true;
     this._drawSlotBg(slot.bg, false);
     this._updateRunButton();
@@ -365,8 +380,9 @@ export default class WeaponSlots extends PIXI.Container {
   }
 
   _showTypeError(slot, weaponType) {
-    // Hide type label while error is shown
+    // Hide type/hint labels while error is shown
     if (slot.typeLabel) slot.typeLabel.visible = false;
+    if (slot.hintLabel) slot.hintLabel.visible = false;
 
     // Create error message with full type names
     const expectedType = slot.type || 'any';
@@ -393,8 +409,9 @@ export default class WeaponSlots extends PIXI.Container {
         errorText.destroy();
       }
       this._drawSlotBg(originalBg, slot.weapon !== null);
-      // Show type label again
+      // Show type/hint labels again
       if (slot.typeLabel) slot.typeLabel.visible = true;
+      if (slot.hintLabel && !slot.weapon) slot.hintLabel.visible = true;
     }, 1500);
   }
 
