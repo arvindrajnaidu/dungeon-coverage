@@ -2,6 +2,7 @@ node_modules/
 dist/
 .playwright-mcp/
 *.png
+!public/sprites/**/*.png
 .DS_Store
 __MACOSX/
 public/sounds/.DS_Store
