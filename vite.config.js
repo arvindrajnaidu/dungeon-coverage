@@ -54,8 +54,8 @@ function babelExternals() {
           export var transformFromAst = bc.transformFromAst;
           export var transformFileSync = function() { throw new Error("Not available in browser"); };
           export var types = unwrap(pkgs.types) || bc.types;
-          export var template = unwrap(pkgs.template);
-          export var traverse = unwrap(pkgs.traverse);
+          export var template = unwrap(pkgs.template) || bc.template;
+          export var traverse = unwrap(pkgs.traverse) || bc.traverse;
           export var parse = bc.parse || function(code, opts) {
             return bc.transform(code, Object.assign({}, opts, { ast: true, code: false })).ast;
           };
