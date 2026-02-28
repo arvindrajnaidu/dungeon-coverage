@@ -2,6 +2,8 @@
 
 A Javascript unit testing game powered by [maineffectjs](https://github.com/arvindrajnaidu/maineffect).
 
+**[Play it now](https://arvindrajnaidu.github.io/dungeon-coverage/)**
+
 ![Dungeon Coverage gameplay](demo.gif)
 
 ## How it works
