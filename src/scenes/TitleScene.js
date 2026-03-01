@@ -47,21 +47,28 @@ export default class TitleScene {
     this.container.addChild(title);
 
     // Subtitle with link
-    const prefix = 'A Javascript unit testing game powered by ';
+    const prefix = 'A Javascript unit testing game\npowered by ';
     const linkText = 'maineffectjs';
+    const subtitleFontSize = isMobile ? 11 : 13;
     const subtitleText = new PIXI.Text(prefix, {
-      fontFamily: 'monospace', fontSize: 13, fill: 0xaaaacc,
+      fontFamily: 'monospace', fontSize: subtitleFontSize, fill: 0xaaaacc, align: 'center',
     });
     const subtitleLink = new PIXI.Text(linkText, {
-      fontFamily: 'monospace', fontSize: 13, fill: 0x4488cc,
+      fontFamily: 'monospace', fontSize: subtitleFontSize, fill: 0x4488cc,
     });
-    const totalWidth = subtitleText.width + subtitleLink.width;
-    subtitleText.x = (screenW - totalWidth) / 2;
+    // Measure "powered by maineffectjs" to center the last line
+    const poweredByText = new PIXI.Text('powered by ', { fontFamily: 'monospace', fontSize: subtitleFontSize });
+    const lastLineWidth = poweredByText.width + subtitleLink.width;
+    poweredByText.destroy();
+    subtitleText.anchor.set(0.5, 0);
+    subtitleText.x = screenW / 2;
     subtitleText.y = 163;
     this.container.addChild(subtitleText);
 
-    subtitleLink.x = subtitleText.x + subtitleText.width;
-    subtitleLink.y = 163;
+    // Position link at end of "powered by " on the second line
+    const lastLineY = 163 + subtitleText.height - subtitleLink.height;
+    subtitleLink.x = (screenW - lastLineWidth) / 2 + (lastLineWidth - subtitleLink.width);
+    subtitleLink.y = lastLineY;
     subtitleLink.eventMode = 'static';
     subtitleLink.cursor = 'pointer';
     subtitleLink.on('pointerover', () => { subtitleLink.style.fill = 0x66bbff; });
