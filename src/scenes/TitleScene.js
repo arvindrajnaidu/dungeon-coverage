@@ -57,11 +57,11 @@ export default class TitleScene {
     });
     const totalWidth = subtitleText.width + subtitleLink.width;
     subtitleText.x = (screenW - totalWidth) / 2;
-    subtitleText.y = 163;
+    subtitleText.y = 175;
     this.container.addChild(subtitleText);
 
     subtitleLink.x = subtitleText.x + subtitleText.width;
-    subtitleLink.y = 163;
+    subtitleLink.y = 175;
     subtitleLink.eventMode = 'static';
     subtitleLink.cursor = 'pointer';
     subtitleLink.on('pointerover', () => { subtitleLink.style.fill = 0x66bbff; });
