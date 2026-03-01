@@ -98,7 +98,7 @@ export default class TitleScene {
     }
 
     // Level buttons
-    const startY = 200;
+    const startY = 220;
     for (let i = 0; i < levels.length; i++) {
       const level = levels[i];
       const isUnlocked = i < unlockedLevels;
