@@ -46,29 +46,32 @@ export default class TitleScene {
     title.y = 100;
     this.container.addChild(title);
 
-    // Subtitle with link
-    const prefix = 'A Javascript unit testing game\npowered by ';
-    const linkText = 'maineffectjs';
+    // Subtitle - line 1
     const subtitleFontSize = isMobile ? 11 : 13;
-    const subtitleText = new PIXI.Text(prefix, {
-      fontFamily: 'monospace', fontSize: subtitleFontSize, fill: 0xaaaacc, align: 'center',
+    const line1 = new PIXI.Text('A Javascript unit testing game', {
+      fontFamily: 'monospace', fontSize: subtitleFontSize, fill: 0xaaaacc,
     });
-    const subtitleLink = new PIXI.Text(linkText, {
+    line1.anchor.set(0.5);
+    line1.x = screenW / 2;
+    line1.y = 163;
+    this.container.addChild(line1);
+
+    // Subtitle - line 2: "powered by " + clickable "maineffectjs"
+    const poweredBy = new PIXI.Text('powered by ', {
+      fontFamily: 'monospace', fontSize: subtitleFontSize, fill: 0xaaaacc,
+    });
+    const subtitleLink = new PIXI.Text('maineffectjs', {
       fontFamily: 'monospace', fontSize: subtitleFontSize, fill: 0x4488cc,
     });
-    // Measure "powered by maineffectjs" to center the last line
-    const poweredByText = new PIXI.Text('powered by ', { fontFamily: 'monospace', fontSize: subtitleFontSize });
-    const lastLineWidth = poweredByText.width + subtitleLink.width;
-    poweredByText.destroy();
-    subtitleText.anchor.set(0.5, 0);
-    subtitleText.x = screenW / 2;
-    subtitleText.y = 163;
-    this.container.addChild(subtitleText);
+    const line2Width = poweredBy.width + subtitleLink.width;
+    const line2X = (screenW - line2Width) / 2;
+    const line2Y = 163 + 18;
+    poweredBy.x = line2X;
+    poweredBy.y = line2Y;
+    this.container.addChild(poweredBy);
 
-    // Position link at end of "powered by " on the second line
-    const lastLineY = 163 + subtitleText.height - subtitleLink.height;
-    subtitleLink.x = (screenW - lastLineWidth) / 2 + (lastLineWidth - subtitleLink.width);
-    subtitleLink.y = lastLineY;
+    subtitleLink.x = line2X + poweredBy.width;
+    subtitleLink.y = line2Y;
     subtitleLink.eventMode = 'static';
     subtitleLink.cursor = 'pointer';
     subtitleLink.on('pointerover', () => { subtitleLink.style.fill = 0x66bbff; });
