@@ -71,18 +71,20 @@ export default class TitleScene {
     });
     this.container.addChild(subtitleLink);
 
-    // Mobile warning
+    // Mobile block - show message and stop
     if (isMobile) {
-      const mobileWarning = new PIXI.Text('Best played on desktop', {
+      const mobileMsg = new PIXI.Text('Desktop only for now.\nMobile support coming soon!', {
         fontFamily: 'monospace',
-        fontSize: 11,
+        fontSize: 14,
         fill: 0xffaa44,
         align: 'center',
+        lineHeight: 22,
       });
-      mobileWarning.anchor.set(0.5);
-      mobileWarning.x = screenW / 2;
-      mobileWarning.y = 175;
-      this.container.addChild(mobileWarning);
+      mobileMsg.anchor.set(0.5);
+      mobileMsg.x = screenW / 2;
+      mobileMsg.y = screenH / 2;
+      this.container.addChild(mobileMsg);
+      return;
     }
 
     // Level buttons
