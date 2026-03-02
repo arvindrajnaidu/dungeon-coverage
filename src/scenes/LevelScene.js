@@ -867,7 +867,7 @@ export default class LevelScene {
   }
 
   _updateAnimating(delta) {
-    const arrivedAtTile = this.player.update();
+    const arrivedAtTile = this.player.update(delta);
 
     if (arrivedAtTile) {
       this._collectGemAtPlayer();
@@ -1151,7 +1151,7 @@ export default class LevelScene {
       case PHASES.SETUP:
         // Waiting for weapon drag-drop - but still animate player idle
         if (this.player) {
-          this.player.update();
+          this.player.update(delta);
         }
         // Animate weapon slots glow effect
         if (this.weaponSlots) {

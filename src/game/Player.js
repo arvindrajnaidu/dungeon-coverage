@@ -68,12 +68,12 @@ export default class Player {
   }
 
   // Returns true when the player has just arrived at a new grid tile
-  update() {
+  update(delta = 1) {
     let arrivedAtNewTile = false;
 
     // Handle teleport animation
     if (this.teleporting) {
-      arrivedAtNewTile = this._updateTeleport();
+      arrivedAtNewTile = this._updateTeleport(delta);
       return arrivedAtNewTile;
     }
 
@@ -85,15 +85,16 @@ export default class Player {
 
     if (isCurrentlyMoving) {
       // Still moving to current target
-      if (Math.abs(dx) <= this.moveSpeed) {
+      const speed = this.moveSpeed * delta;
+      if (Math.abs(dx) <= speed) {
         this.pixelX = this.targetPixelX;
       } else {
-        this.pixelX += Math.sign(dx) * this.moveSpeed;
+        this.pixelX += Math.sign(dx) * speed;
       }
-      if (Math.abs(dy) <= this.moveSpeed) {
+      if (Math.abs(dy) <= speed) {
         this.pixelY = this.targetPixelY;
       } else {
-        this.pixelY += Math.sign(dy) * this.moveSpeed;
+        this.pixelY += Math.sign(dy) * speed;
       }
 
       // Flip sprite based on movement direction
@@ -104,7 +105,7 @@ export default class Player {
       }
 
       // Run animation
-      this._updateAnimation(this.runFrames, 6);
+      this._updateAnimation(this.runFrames, 6, delta);
       this.idleTime = 0;
     } else {
       // Arrived at target tile — advance to next in path
@@ -122,7 +123,7 @@ export default class Player {
       } else {
         this.walking = false;
         // Idle animation
-        this._updateAnimation(this.idleFrames, 10);
+        this._updateAnimation(this.idleFrames, 10, delta);
         this.idleTime++;
       }
     }
@@ -143,8 +144,8 @@ export default class Player {
     }
   }
 
-  _updateTeleport() {
-    const fadeSpeed = 0.1;
+  _updateTeleport(delta = 1) {
+    const fadeSpeed = 0.1 * delta;
 
     if (this.teleportPhase === 0) {
       // Fade out
@@ -177,8 +178,8 @@ export default class Player {
     return false;
   }
 
-  _updateAnimation(frames, speed) {
-    this.animTimer++;
+  _updateAnimation(frames, speed, delta = 1) {
+    this.animTimer += delta;
     if (this.animTimer >= speed) {
       this.animTimer = 0;
       this.animFrame = (this.animFrame + 1) % frames.length;
